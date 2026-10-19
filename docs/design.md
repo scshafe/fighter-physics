@@ -236,6 +236,24 @@ them, so an entity's contacts never depend on the order of other entities.
   platform) are moved by the platform's displacement.
 - **Destroy.** `destroy_platform` removes it permanently (riders fall).
 
+### Placeables
+
+Things the game puts on the stage during a match live in `World::placeables`:
+numbered slots (at most `kMaxPlaceables` = 64) of plain data, so they are in
+the snapshot and the hash like everything else. `place(world, Placeable)`
+takes the lowest free slot (or appends) and returns it, or -1 when full or the
+rect is empty; `remove_placeable` frees one; `life > 0` makes it expire after
+that many frames (`PlaceableRemoved`, with `Fell` for its riders). A free slot
+is all zero, so a stale rect never reaches the hash.
+
+For contacts a slot is a platform id: ids from `stage.platforms.size()` up are
+placeable slots. `EntityState::support` and `Landed.other` name a wall as
+`stage.platforms.size() + slot`.
+
+- **Wall.** Solid, like a Solid platform (stood on, walked into, bumped from
+  below, pushed out of the shallowest way if placed on an entity), but it
+  takes no stress and does not move.
+
 ## Tests
 
 `tests/*_test.cpp` are plain CTest executables with a small check helper.

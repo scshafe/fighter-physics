@@ -82,10 +82,22 @@ class Scenario {
     return intents_;
   }
 
+  // The game's placements: a function of the frame, so replays from a snapshot repeat them.
+  void place_walls() {
+    if (w.frame % 60 == 20) {
+      const double x = -40.0 + 4.0 * static_cast<double>((w.frame / 60) % 10);
+      Placeable wall;
+      wall.rect = {F(x), F(x + 3), F(0), F(6)};
+      wall.life = 90;
+      place(w, wall);
+    }
+  }
+
   // One frame of the simulation as the game would run it: step, then bring
   // eliminated entities back. A pure function of the world and the intents.
   void advance(const std::vector<Intent>& in, JobSystem* jobs) {
     ev.clear();
+    place_walls();
     step(cfg, w, in, ev, jobs);
     for (EntityState& e : w.entities) {
       if (e.eliminated != 0) {

@@ -73,6 +73,25 @@ struct Config {
   std::vector<MovementParams> params;  // one per entity, by id
 };
 
+// Things the game puts on the stage during a match. They live in the world
+// (plain data, in the snapshot and the hash), in numbered slots that stay
+// valid until the placeable goes. A slot is also a platform id for contacts:
+// platform ids from `stage.platforms.size()` up are placeable slots, so
+// `Landed.other` and `EntityState::support` name a wall by
+// `stage.platforms.size() + slot`.
+enum class PlaceableKind : std::uint8_t {
+  Wall,  // a solid block: stood on, walked into, bumped from below, like a Solid platform
+};
+
+constexpr int kMaxPlaceables = 64;
+
+struct Placeable {
+  PlaceableKind kind = PlaceableKind::Wall;
+  std::uint8_t active = 0;  // 0: the slot is free (and the rest of it is zero)
+  Rect rect{};
+  std::int32_t life = 0;  // frames left; 0 while active: permanent
+};
+
 enum class EventType : std::uint8_t {
   Landed,             // id: entity, other: platform it landed on
   Fell,               // id: entity left its support (walked off, drop-through, platform vanished)
@@ -84,6 +103,7 @@ enum class EventType : std::uint8_t {
   PlatformRespawned,  // id: platform is solid again
   PlatformDestroyed,  // id: platform was destroyed (permanently)
   PlatformDoomed,     // id: a stress platform passed `doom_at`
+  PlaceableRemoved,   // id: placeable slot, expired or removed
 };
 
 struct Event {
@@ -113,6 +133,7 @@ struct PlatformState {
 struct World {
   std::vector<EntityState> entities;
   std::vector<PlatformState> platforms;  // one per Stage platform
+  std::vector<Placeable> placeables;     // slots, at most kMaxPlaceables
   std::uint32_t frame = 0;
 };
 
@@ -121,6 +142,15 @@ World make_world(const Config& cfg);
 
 // An entity at rest on top of a platform, centred at x.
 EntityState spawn_on(const Config& cfg, int platform, Fixed x);
+
+// Put a placeable on the stage in the lowest free slot (a new one if none is
+// free); returns the slot, or -1 if all kMaxPlaceables slots are taken or the
+// rect is empty or inverted. `p.life` > 0 makes it expire after that many
+// frames. An entity it lands on is pushed out the shallowest way on the next step.
+int place(World& w, Placeable p);
+
+// Take a placeable away now (its riders fall). No effect on a free slot.
+void remove_placeable(const Config& cfg, World& w, int slot, Events& events);
 
 // Destroy a platform for good (a move, a hazard): entities standing on it fall.
 // Appends to `events`; the caller owns clearing it.

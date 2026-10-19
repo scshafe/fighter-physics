@@ -155,6 +155,7 @@ void resolve_platforms(const std::vector<View>& views, EntityState& e, const Mov
 std::vector<View> make_views(const Config& cfg, const World& w) {
   const int n = static_cast<int>(cfg.stage.platforms.size());
   std::vector<View> views(n);
+  views.reserve(n + w.placeables.size());
   for (int i = 0; i < n; ++i) {
     const PlatformDef& d = cfg.stage.platforms[i];
     const PlatformState& s = w.platforms[i];
@@ -164,6 +165,9 @@ std::vector<View> make_views(const Config& cfg, const World& w) {
     r.bottom += s.offset.y;
     r.top += s.offset.y;
     views[i] = {r, d.kind, in_play(s.phase)};
+  }
+  for (const Placeable& p : w.placeables) {  // one view per slot, so slot k is platform id n + k
+    views.push_back({p.rect, PlatformKind::Solid, p.active != 0 && p.kind == PlaceableKind::Wall});
   }
   return views;
 }
@@ -353,7 +357,7 @@ Load platform_loads(const Config& cfg, const World& w) {
       ++depth;
     }
     const EntityState& r = w.entities[root];
-    if (r.support < 0 || r.eliminated != 0) continue;
+    if (r.support < 0 || r.support >= np || r.eliminated != 0) continue;  // placeables take no stress
 
     feet.assign(1, r.support);
     for (int j = 0; j < np; ++j) {
@@ -431,6 +435,19 @@ void update_platforms(const Config& cfg, World& w, Events& events) {
   }
 }
 
+// Placeables count down their life and go when it ends.
+void update_placeables(const Config& cfg, World& w, Events& events) {
+  const int np = static_cast<int>(cfg.stage.platforms.size());
+  for (int k = 0; k < static_cast<int>(w.placeables.size()); ++k) {
+    Placeable& p = w.placeables[k];
+    if (p.active != 0 && p.life > 0 && --p.life == 0) {
+      p = Placeable{};
+      events.push_back({EventType::PlaceableRemoved, k, -1});
+      release_riders(w, np + k, events);
+    }
+  }
+}
+
 }  // namespace
 
 World make_world(const Config& cfg) {
@@ -444,6 +461,27 @@ EntityState spawn_on(const Config& cfg, int platform, Fixed x) {
   e.pos = {x, cfg.stage.platforms[platform].rect.top};
   e.support = static_cast<std::int16_t>(platform);
   return e;
+}
+
+int place(World& w, Placeable p) {
+  if (!(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top) || p.life < 0) return -1;
+  p.active = 1;
+  for (int k = 0; k < static_cast<int>(w.placeables.size()); ++k) {
+    if (w.placeables[k].active == 0) {
+      w.placeables[k] = p;
+      return k;
+    }
+  }
+  if (w.placeables.size() >= static_cast<std::size_t>(kMaxPlaceables)) return -1;
+  w.placeables.push_back(p);
+  return static_cast<int>(w.placeables.size()) - 1;
+}
+
+void remove_placeable(const Config& cfg, World& w, int slot, Events& events) {
+  if (slot < 0 || slot >= static_cast<int>(w.placeables.size()) || w.placeables[slot].active == 0) return;
+  w.placeables[slot] = Placeable{};
+  events.push_back({EventType::PlaceableRemoved, slot, -1});
+  release_riders(w, static_cast<int>(cfg.stage.platforms.size()) + slot, events);
 }
 
 void destroy_platform(const Config&, World& w, int platform, Events& events) {
@@ -509,6 +547,7 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
 
   resolve_entities(cfg, w, prev_pos, events, jobs);
   update_platforms(cfg, w, events);
+  update_placeables(cfg, w, events);
   ++w.frame;
 }
 

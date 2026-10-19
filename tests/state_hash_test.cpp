@@ -44,7 +44,7 @@ void test_stable() {
   // A pinned value: the hash must not change with the platform, compiler or
   // library (CI runs this on Linux and macOS). If the state layout changes on
   // purpose, update it deliberately.
-  CHECK(hash(sample()) == 0xf7f9f7783b8cb01dULL);
+  CHECK(hash(sample()) == 0xadbd70cfdff0d151ULL);
 }
 
 void test_sensitive() {
