@@ -7,6 +7,14 @@
 namespace fp {
 namespace {
 
+// A free slot is the default Placeable, so nothing stale reaches the hash.
+bool is_free_slot(const Placeable& p) {
+  const Placeable z{};
+  return p.kind == z.kind && p.life == 0 && p.rect.left == z.rect.left && p.rect.right == z.rect.right &&
+         p.rect.bottom == z.rect.bottom && p.rect.top == z.rect.top && p.traction_scale == z.traction_scale &&
+         p.speed_scale == z.speed_scale;
+}
+
 // FNV-1a over little-endian bytes, with a final mix.
 class Hasher {
  public:
@@ -119,7 +127,7 @@ class Reader {
   std::size_t pos_ = 0;
 };
 
-constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 3};  // format, then version
+constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 4};  // format, then version
 
 bool flag(std::uint8_t v) { return v <= 1; }
 
@@ -134,13 +142,11 @@ bool valid(const Config& cfg, const World& w) {
   }
   if (w.placeables.size() > static_cast<std::size_t>(kMaxPlaceables)) return false;
   for (const Placeable& p : w.placeables) {
-    if (static_cast<std::uint8_t>(p.kind) > static_cast<std::uint8_t>(PlaceableKind::Wall)) return false;
+    if (static_cast<std::uint8_t>(p.kind) > static_cast<std::uint8_t>(PlaceableKind::Sticky)) return false;
     if (!flag(p.active) || p.life < 0) return false;
     if (p.active != 0 && !(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top)) return false;
-    if (p.active == 0 && (p.life != 0 || p.rect.left != Fixed::zero() || p.rect.right != Fixed::zero() ||
-                          p.rect.bottom != Fixed::zero() || p.rect.top != Fixed::zero())) {
-      return false;
-    }
+    if (p.traction_scale < Fixed::zero() || p.speed_scale < Fixed::zero()) return false;
+    if (p.active == 0 && !is_free_slot(p)) return false;
   }
   const int nslots = np + static_cast<int>(w.placeables.size());
   for (const EntityState& e : w.entities) {

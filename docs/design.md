@@ -253,6 +253,18 @@ placeable slots. `EntityState::support` and `Landed.other` name a wall as
 - **Wall.** Solid, like a Solid platform (stood on, walked into, bumped from
   below, pushed out of the shallowest way if placed on an entity), but it
   takes no stress and does not move.
+- **Slick and Sticky patches.** Ground patches that change how an entity moves
+  while it stands on the ground (grounded modes, including a jump squat) with
+  its feet inside the rect (edges included, `bottom <= y <= top`). They scale
+  `traction` and `skid_traction` by `traction_scale` and `walk_max`,
+  `dash_max` and `run_max` by `speed_scale`; speed above a cap is shed at the
+  (scaled) traction per frame, so ice with a lower cap does not slow anyone.
+  Overlapping patches multiply in slot order. The air is not affected. They
+  are not platforms: a patch slot is never a `support`. Slick is the ice
+  preset (traction below 1), Sticky the mud preset (traction above 1, speed
+  below 1); the engine treats them alike. The patch is read from where the
+  entity stood at the start of the frame, so patches never depend on the order
+  of entities.
 
 ## Tests
 

@@ -118,5 +118,24 @@ int main() {
                    if (f == 1) place(w, block(20, 24, 0, 6, 40));
                  }));
   }
+  // Run, stop and slide across ice [60, 120] (traction x0.25) and then mud [120, 190] (traction
+  // x3, speeds x0.5) on the floor: the release at frame 40 slides far on the ice and stops fast in the mud.
+  {
+    Config c = floor_stage();
+    auto patch = [](PlaceableKind k, double l, double r, double traction, double speed) {
+      Placeable p = block(l, r, -1, 0);
+      p.kind = k;
+      p.traction_scale = F(traction);
+      p.speed_scale = F(speed);
+      return p;
+    };
+    check_golden("ice_then_mud", trace(c, spawn_on(c, 0, F(0)), 160, [&](int f, World& w, Intent& in) {
+                   if (f == 1) {
+                     place(w, patch(PlaceableKind::Slick, 60, 120, 0.25, 1.0));
+                     place(w, patch(PlaceableKind::Sticky, 120, 190, 3.0, 0.5));
+                   }
+                   in.move_x = f <= 40 ? F(1) : F(0);
+                 }));
+  }
   return fp_test::finish();
 }

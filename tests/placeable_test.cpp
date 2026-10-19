@@ -1,4 +1,4 @@
-// Placeables: walls (so far). Hand-worked numbers, as in world_test.cpp. The floor is
+// Placeables: walls and ground patches. Hand-worked numbers, as in world_test.cpp. The floor is
 // [-100, 100] x [-10, 0], so a wall's platform id is 1 + its slot.
 #include "world_fixture.hpp"
 
@@ -133,9 +133,92 @@ void test_place_on_entity() {
   CHECK(r.e().pos.x == F(-2.5) && r.e().mode == Mode::Idle);
 }
 
+Placeable patch(PlaceableKind k, double l, double r, double traction, double speed = 1.0) {
+  Placeable p = wall(l, r, -1, 0);
+  p.kind = k;
+  p.traction_scale = F(traction);
+  p.speed_scale = F(speed);
+  return p;
+}
+
+// Idle and sliding at vel.x 1 with traction 0.0625: 1, 0.9375, ... without a patch; with half
+// traction (0.03125) after 4 frames 0.875; with double traction (0.125) after 4 frames 0.5.
+// Outside the patch, or in the air above it, the normal friction applies.
+void test_traction_patches() {
+  auto slide = [&](double x, const Placeable* p, int frames) {
+    Config c = stage();
+    EntityState e = spawn_on(c, 0, F(x));
+    e.vel.x = F(1);
+    Runner r(c, e);
+    if (p) place(r.w, *p);
+    for (int i = 0; i < frames; ++i) r.step();
+    return r.e().vel.x;
+  };
+  const Placeable ice = patch(PlaceableKind::Slick, -50, 50, 0.5);
+  const Placeable mud = patch(PlaceableKind::Sticky, -50, 50, 2.0);
+  CHECK(slide(0, nullptr, 4) == F(0.75));
+  CHECK(slide(0, &ice, 4) == F(0.875));
+  CHECK(slide(0, &mud, 4) == F(0.5));
+  CHECK(slide(60, &ice, 4) == F(0.75));  // x = 60 is off the patch
+  CHECK(slide(-50, &ice, 1) == F(0.96875));  // the edge counts
+  // Frictionless ice keeps the speed; the entity slides on and leaves the patch at x = 50.
+  const Placeable glass = patch(PlaceableKind::Slick, -50, 50, 0.0);
+  CHECK(slide(0, &glass, 20) == F(1));
+  // Airborne above the patch: nothing.
+  Config c = stage();
+  Runner a(c, air(0, 0.5, 1, 0)), b(c, air(0, 0.5, 1, 0));
+  place(a.w, ice);
+  a.step();
+  b.step();
+  CHECK(a.e().vel.x == b.e().vel.x && a.e().vel.x < F(1));
+}
+
+// Patches stack by multiplication: halved and doubled is the normal friction again.
+void test_patches_multiply() {
+  Config c = stage();
+  EntityState e = spawn_on(c, 0, F(0));
+  e.vel.x = F(1);
+  Runner r(c, e);
+  place(r.w, patch(PlaceableKind::Slick, -50, 50, 0.5));
+  place(r.w, patch(PlaceableKind::Sticky, -10, 10, 2.0));
+  for (int i = 0; i < 4; ++i) r.step();
+  CHECK(r.e().vel.x == F(0.75));
+}
+
+// A speed cap: running at 2 (run_max 2) with the cap halved to 1 sheds the normal traction
+// (0.0625) a frame: 1.9375, 1.875, ...
+void test_speed_patch() {
+  Config c = stage();
+  EntityState e = spawn_on(c, 0, F(-50));
+  e.mode = Mode::Run;
+  e.vel.x = F(2);
+  Runner r(c, e);
+  place(r.w, patch(PlaceableKind::Sticky, -60, 60, 1.0, 0.5));
+  Intent go;
+  go.move_x = F(1);
+  r.step(go);
+  CHECK(r.e().vel.x == F(1.9375));
+  r.step(go);
+  CHECK(r.e().vel.x == F(1.875));
+}
+
+void test_patch_slots() {
+  World w = make_world(stage());
+  Placeable bad = patch(PlaceableKind::Slick, -5, 5, -0.5);
+  CHECK_EQ(place(w, bad), -1);
+  CHECK_EQ(place(w, patch(PlaceableKind::Slick, -5, 5, 0.5)), 0);
+  Events ev;
+  remove_placeable(stage(), w, 0, ev);
+  CHECK(w.placeables[0].traction_scale == Fixed::one() && w.placeables[0].active == 0);
+}
+
 }  // namespace
 
 int main() {
+  test_traction_patches();
+  test_patches_multiply();
+  test_speed_patch();
+  test_patch_slots();
   test_wall_blocks();
   test_land_on_wall();
   test_bump_underside();

@@ -82,8 +82,8 @@ class Scenario {
     return intents_;
   }
 
-  // The game's placements: a function of the frame, so replays from a snapshot repeat them.
-  void place_walls() {
+  // The game's placements (walls, and ice and mud on the floor): a function of the frame, so replays from a snapshot repeat them.
+  void place_scheduled() {
     if (w.frame % 60 == 20) {
       const double x = -40.0 + 4.0 * static_cast<double>((w.frame / 60) % 10);
       Placeable wall;
@@ -91,13 +91,23 @@ class Scenario {
       wall.life = 90;
       place(w, wall);
     }
+    if (w.frame % 90 == 5) {
+      Placeable patch;
+      const bool ice = (w.frame / 90) % 2 == 0;
+      patch.kind = ice ? PlaceableKind::Slick : PlaceableKind::Sticky;
+      patch.rect = {F(-50), F(10), F(-1), F(0)};
+      patch.life = 120;
+      patch.traction_scale = ice ? F(0.25) : F(3);
+      patch.speed_scale = ice ? F(1) : F(0.5);
+      place(w, patch);
+    }
   }
 
   // One frame of the simulation as the game would run it: step, then bring
   // eliminated entities back. A pure function of the world and the intents.
   void advance(const std::vector<Intent>& in, JobSystem* jobs) {
     ev.clear();
-    place_walls();
+    place_scheduled();
     step(cfg, w, in, ev, jobs);
     for (EntityState& e : w.entities) {
       if (e.eliminated != 0) {
