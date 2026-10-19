@@ -149,7 +149,25 @@ then contacts against the stage, which is static during contact resolution:
 - **Elimination.** Leaving the blast rectangle sets `eliminated` and emits
   `Eliminated`; eliminated entities are frozen until the game replaces them.
 
-Events so far: `Landed`, `Fell`, `Eliminated`.
+Events: `Landed`, `Fell`, `Eliminated`, `PlatformShaking`, `PlatformCrumbled`,
+`PlatformRespawned`, `PlatformDestroyed`. `step` appends; the caller clears the
+buffer (so events from `destroy_platform` between steps are not lost).
+
+### Platform lifecycle (phase 6, after all entities)
+
+`World::platforms` holds each platform's phase, timer, motion clock and
+offset. Contacts in a frame see the platforms as the previous frame left
+them, so an entity's contacts never depend on the order of other entities.
+
+- **Crumble.** `shake_frames > 0`: the frame an entity is found standing on a
+  Solid platform it starts Shaking (still solid) for `shake_frames`, then is
+  Gone for `respawn_frames` (0 = for good), then Solid again. Riders fall when
+  it goes (`Fell`). If it respawns on an entity, the entity is pushed out the
+  shallowest way (usually up and landed).
+- **Motion.** `move_period` (even) frames for a there-and-back trip of
+  `travel` from the rest rectangle, linear. Riders (entities supported by the
+  platform) are moved by the platform's displacement.
+- **Destroy.** `destroy_platform` removes it permanently (riders fall).
 
 ## Tests
 
