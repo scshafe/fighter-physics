@@ -41,6 +41,10 @@ bool in_play(PlatformPhase ph) noexcept {
 
 bool has_stress(const PlatformDef& d) noexcept { return d.stress.shake_at > Fixed::zero(); }
 
+bool feet_in(const Rect& r, Vec2 feet) noexcept {
+  return feet.x >= r.left && feet.x <= r.right && feet.y >= r.bottom && feet.y <= r.top;
+}
+
 // The movement parameters an entity on the ground has this frame: the stage's patches under
 // its feet scale friction and the speed caps. Returns `p` itself when none applies.
 const MovementParams& patched(const std::vector<Placeable>& placeables, const EntityState& e,
@@ -49,7 +53,7 @@ const MovementParams& patched(const std::vector<Placeable>& placeables, const En
   const MovementParams* out = &p;
   for (const Placeable& q : placeables) {
     if (q.active == 0 || (q.kind != PlaceableKind::Slick && q.kind != PlaceableKind::Sticky)) continue;
-    if (e.pos.x < q.rect.left || e.pos.x > q.rect.right || e.pos.y < q.rect.bottom || e.pos.y > q.rect.top) continue;
+    if (!feet_in(q.rect, e.pos)) continue;
     if (out == &p) {
       scratch = p;
       out = &scratch;
@@ -486,7 +490,10 @@ EntityState spawn_on(const Config& cfg, int platform, Fixed x) {
 }
 
 int place(World& w, Placeable p) {
-  if (!(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top) || p.life < 0 || p.traction_scale < Fixed::zero() || p.speed_scale < Fixed::zero()) return -1;
+  if (!(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top) || p.life < 0 || p.traction_scale < Fixed::zero() || p.speed_scale < Fixed::zero() ||
+      (p.kind == PlaceableKind::Spring && p.launch.y <= Fixed::zero())) {
+    return -1;
+  }
   p.active = 1;
   for (int k = 0; k < static_cast<int>(w.placeables.size()); ++k) {
     if (w.placeables[k].active == 0) {
@@ -557,6 +564,21 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
     }
     resolve_platforms(views, e, p, prev, id, ev);
     if (e.drop_timer > 0) --e.drop_timer;
+
+    // A spring under the feet of an entity on the ground launches it.
+    if (grounded_mode(e.mode)) {
+      for (int k = 0; k < static_cast<int>(w.placeables.size()); ++k) {
+        const Placeable& q = w.placeables[k];
+        if (q.active == 0 || q.kind != PlaceableKind::Spring || !feet_in(q.rect, e.pos)) continue;
+        start_fall(e);
+        e.vel.x += q.launch.x;
+        e.vel.y = q.launch.y;
+        e.support = -1;
+        e.support_entity = -1;
+        ev.push_back({EventType::Sprung, id, k});
+        break;
+      }
+    }
 
     const Rect& b = cfg.stage.blast;
     if (e.pos.x < b.left || e.pos.x > b.right || e.pos.y < b.bottom || e.pos.y > b.top) {
