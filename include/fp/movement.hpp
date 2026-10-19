@@ -95,6 +95,7 @@ struct EntityState {
   std::uint8_t prev_down = 0;     // fast_fall intent last frame (0/1)
   std::uint8_t eliminated = 0;    // 0/1: left the blast zone; frozen until the game replaces it
   std::int16_t support = -1;      // index of the platform stood on, or -1
+  std::int16_t support_entity = -1;  // id of the entity stood on (its head), or -1
   std::int16_t drop_timer = 0;    // frames left ignoring pass-through platforms
 };
 

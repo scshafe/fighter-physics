@@ -153,6 +153,25 @@ Events: `Landed`, `Fell`, `Eliminated`, `PlatformShaking`, `PlatformCrumbled`,
 `PlatformRespawned`, `PlatformDestroyed`. `step` appends; the caller clears the
 buffer (so events from `destroy_platform` between steps are not lost).
 
+### Entity-entity contact (phase 5b)
+
+Bodies pass through each other side to side. Vertical contact, after every
+entity has moved and met the platforms:
+
+- **Landing.** An airborne entity whose feet cross another's head (and whose
+  body overlaps it horizontally) lands on it: `LandedOnEntity`, and it
+  *stands on* that entity (`support_entity`).
+- **Bump.** A rising entity whose head crosses another's underside stops
+  under it (`BumpedEntity`). Entities standing on you, directly or in a stack,
+  are not bumped: you carry them.
+- **Riding.** A rider follows the head it stands on (so a jump lifts the
+  stack) and falls when the carrier is eliminated or moves out from under it
+  (the bodies stop overlapping horizontally). Platforms carry riders of riders
+  too. Stacks settle in at most one round per entity, each round reading the
+  previous round's heights, and landing/bump decisions read only the
+  positions before and after the entities' own motion, so ids and processing
+  order do not change the result.
+
 ### Platform lifecycle (phase 6, after all entities)
 
 `World::platforms` holds each platform's phase, timer, motion clock and
