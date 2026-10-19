@@ -38,11 +38,28 @@ frame:
    destruction.
 7. Emit events for the game layer: landed, fell, crumbled, eliminated.
 
-**Parallelism.** A job system with a fixed worker count. Per-entity phases
-(1-3) partition the entities. Broadphase and contacts are parallel but are
-**reduced in a deterministic order**, sorted by stable entity ids, so the
-result never depends on thread count or timing. Tests run the same scenario
-with 1, 2 and N workers and require identical hashes.
+**Parallelism (implemented).** `fp::step(cfg, world, intents, events, jobs)`
+takes an optional `JobSystem*`; without one it is the serial step. The
+phases are:
+
+1. Per entity, in parallel: the drop-through press, `advance` (motion), platform
+   contacts against the per-step platform view, and the blast-zone check. An
+   entity writes only itself and its own event buffer.
+2. Entity-entity landing and bump decisions, in parallel: each reads the
+   positions before and after phase 1 and a snapshot of who rides whom, and
+   writes only itself.
+3. Rider follow rounds, in parallel per round, each round reading the previous
+   round's heights.
+4. Platforms (crumble, respawn, motion, carrying riders), serially: they are
+   few and touch their riders.
+
+Per-entity event buffers are concatenated in entity id order, so the event
+stream is the same for any worker count. There is no broadphase: contacts are
+brute force over the platforms and entities, which is exact and cheap at the
+sizes a platform fighter has; the rollback benchmark will say if that changes.
+`tests/parallel_determinism_test.cpp` runs a busy 48-entity scenario serially
+and with 1, 2, 3, 4, 5 and 8 workers and requires the same state hash and
+event stream on every frame; its final hash is pinned across platforms.
 
 ## Movement parameters
 
