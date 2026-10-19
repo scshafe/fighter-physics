@@ -1,7 +1,25 @@
 #include "fp/world.hpp"
 
+#include "fp/jobs.hpp"
+
 namespace fp {
 namespace {
+
+// Run f(i) for i in [0, n): across the workers if there is a job system,
+// otherwise in order on this thread. f may write only what index i owns.
+template <class F>
+void for_each(JobSystem* jobs, int n, F&& f) {
+  if (jobs != nullptr) {
+    jobs->parallel_for(n, f);
+  } else {
+    for (int i = 0; i < n; ++i) f(i);
+  }
+}
+
+// Append the per-entity buffers to `out`, in entity id order.
+void merge(Events& out, const std::vector<Events>& parts) {
+  for (const Events& part : parts) out.insert(out.end(), part.begin(), part.end());
+}
 
 // What contact resolution sees of a platform this frame: where it is and
 // whether it is in play. Computed once per step, read-only afterwards.
@@ -191,7 +209,7 @@ Vec2 motion_offset(const PlatformDef& d, std::int32_t clock) {
 // matter. Decisions read the positions after every entity's own motion and
 // platform contacts (`pos1`) and the positions before them (`prev`), and write
 // only the deciding entity, so they do not depend on processing order.
-void resolve_entities(const Config& cfg, World& w, const std::vector<Vec2>& prev, Events& events) {
+void resolve_entities(const Config& cfg, World& w, const std::vector<Vec2>& prev, Events& events, JobSystem* jobs) {
   const int n = static_cast<int>(w.entities.size());
   const std::vector<Vec2> pos1 = [&] {
     std::vector<Vec2> v(n);
@@ -215,9 +233,10 @@ void resolve_entities(const Config& cfg, World& w, const std::vector<Vec2>& prev
     return false;
   };
 
-  for (int a = 0; a < n; ++a) {
+  std::vector<Events> local(n);
+  for_each(jobs, n, [&](int a) {
     EntityState& e = w.entities[a];
-    if (e.eliminated != 0 || e.mode != Mode::Airborne) continue;
+    if (e.eliminated != 0 || e.mode != Mode::Airborne) return;
     const Fixed ha = cfg.params[a].body_height;
     int land_on = -1, bump = -1;
     Fixed best{};
@@ -242,13 +261,14 @@ void resolve_entities(const Config& cfg, World& w, const std::vector<Vec2>& prev
       e.pos.y = best;
       land(e);
       e.support_entity = static_cast<std::int16_t>(land_on);
-      events.push_back({EventType::LandedOnEntity, a, land_on});
+      local[a].push_back({EventType::LandedOnEntity, a, land_on});
     } else if (bump >= 0) {
       e.pos.y = best - ha;
       e.vel.y = Fixed::zero();
-      events.push_back({EventType::BumpedEntity, a, bump});
+      local[a].push_back({EventType::BumpedEntity, a, bump});
     }
-  }
+  });
+  merge(events, local);
 
   // Riders follow the head they stand on. Each round reads the previous
   // round's heights, so a stack settles from the bottom up in at most n rounds
@@ -257,25 +277,29 @@ void resolve_entities(const Config& cfg, World& w, const std::vector<Vec2>& prev
   for (int round = 0; round < n; ++round) {
     std::vector<Fixed> snapshot(n);
     for (int i = 0; i < n; ++i) snapshot[i] = w.entities[i].pos.y;
-    bool changed = false;
-    for (int a = 0; a < n; ++a) {
+    std::vector<char> changed(n, 0);
+    std::vector<Events> fell(n);
+    for_each(jobs, n, [&](int a) {
       EntityState& e = w.entities[a];
       const int b = e.support_entity;
-      if (b < 0) continue;
+      if (b < 0) return;
       if (w.entities[b].eliminated != 0 || !overlaps(a, b)) {
         start_fall(e);
         e.support_entity = -1;
-        events.push_back({EventType::Fell, a, -1});
-        changed = true;
-        continue;
+        fell[a].push_back({EventType::Fell, a, -1});
+        changed[a] = 1;
+        return;
       }
       const Fixed y = snapshot[b] + cfg.params[b].body_height;
       if (e.pos.y != y) {
         e.pos.y = y;
-        changed = true;
+        changed[a] = 1;
       }
-    }
-    if (!changed) break;
+    });
+    merge(events, fell);
+    bool any = false;
+    for (char c : changed) any = any || c != 0;
+    if (!any) break;
   }
 }
 
@@ -350,16 +374,20 @@ void destroy_platform(const Config&, World& w, int platform, Events& events) {
   if (was_in_play) release_riders(w, platform, events);
 }
 
-void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& events) {
+void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& events, JobSystem* jobs) {
   const std::vector<View> views = make_views(cfg, w);
   const int n = static_cast<int>(w.entities.size());
   std::vector<Vec2> prev_pos(n);
-  for (int id = 0; id < n; ++id) {
+  std::vector<Events> local(n);
+
+  // Each entity's own motion and platform contacts: independent, so parallel.
+  for_each(jobs, n, [&](int id) {
     EntityState& e = w.entities[id];
     prev_pos[id] = e.pos;
-    if (e.eliminated != 0) continue;
+    if (e.eliminated != 0) return;
     const MovementParams& p = cfg.params[id];
     const Intent& in = intents[id];
+    Events& ev = local[id];
 
     // A fresh down press on a pass-through platform drops through it.
     if (in.fast_fall && e.prev_down == 0 && e.mode <= Mode::Turnaround && e.support >= 0 &&
@@ -367,7 +395,7 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
       start_fall(e);
       e.support = -1;
       e.drop_timer = static_cast<std::int16_t>(p.drop_through_frames);
-      events.push_back({EventType::Fell, id, -1});
+      ev.push_back({EventType::Fell, id, -1});
     }
 
     const Vec2 prev = e.pos;
@@ -376,7 +404,7 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
       e.support = -1;
       e.support_entity = -1;
     }
-    resolve_platforms(views, e, p, prev, id, events);
+    resolve_platforms(views, e, p, prev, id, ev);
     if (e.drop_timer > 0) --e.drop_timer;
 
     const Rect& b = cfg.stage.blast;
@@ -384,10 +412,12 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
       e.eliminated = 1;
       e.support = -1;
       e.support_entity = -1;
-      events.push_back({EventType::Eliminated, id, -1});
+      ev.push_back({EventType::Eliminated, id, -1});
     }
-  }
-  resolve_entities(cfg, w, prev_pos, events);
+  });
+  merge(events, local);
+
+  resolve_entities(cfg, w, prev_pos, events, jobs);
   update_platforms(cfg, w, events);
   ++w.frame;
 }

@@ -14,6 +14,8 @@
 
 namespace fp {
 
+class JobSystem;
+
 struct Rect {
   Fixed left{}, right{}, bottom{}, top{};  // bottom <= top, y up
 };
@@ -105,6 +107,10 @@ void destroy_platform(const Config& cfg, World& w, int platform, Events& events)
 // platforms (crumble, respawn, motion, carrying their riders). Appends the
 // frame's events to `events` in a deterministic order; the caller clears it.
 // `intents` has one entry per entity.
-void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& events);
+//
+// With a job system the per-entity phases run across its workers; the result
+// (state and events) is identical to the serial step for any worker count.
+void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& events,
+          JobSystem* jobs = nullptr);
 
 }  // namespace fp

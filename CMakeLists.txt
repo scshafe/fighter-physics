@@ -40,6 +40,7 @@ if(BUILD_TESTING)
   fp_add_test(entity_contact)
   fp_add_test(state_hash)
   fp_add_test(jobs)
+  fp_add_test(parallel_determinism)
   fp_add_test(golden)
   target_compile_definitions(fighter_physics_golden_test PRIVATE
     FP_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden")
