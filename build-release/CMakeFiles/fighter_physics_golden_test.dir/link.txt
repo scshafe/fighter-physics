@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/fighter_physics_golden_test.dir/link.d CMakeFiles/fighter_physics_golden_test.dir/tests/golden_test.cpp.o -o fighter_physics_golden_test  libfighter_physics.a
