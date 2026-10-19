@@ -63,6 +63,37 @@ starting point:
 Every field is a fixed-point value in units per frame or per frame squared,
 documented with its Smash analogue.
 
+## Ground movement (implemented)
+
+`fp::step(EntityState&, Intent, MovementParams, Ground)` advances one entity
+one frame (`include/fp/movement.hpp`). Intents are abstract: `move_x` in
+[-1, 1] (clamped). Modes: Idle, Walk, Dash, Run, Skid, Turnaround. A mode's
+`frames` counts frames spent in it including the current one, so
+`dash_frames = 15` is a 15-frame dash.
+
+- **Deadzone and flick.** `|axis| <= deadzone` is neutral. A *flick* is
+  leaving neutral (or switching side) and reaching `dash_threshold` within
+  `flick_frames`; a flick starts a dash from Idle, Walk or (after
+  `skid_frames`) Skid, and restarts it the other way during a Dash (dash
+  dance). Reaching the threshold more slowly walks.
+- **Walk.** Starts at `walk_init` (or the current speed if higher), then
+  accelerates by `walk_accel` toward `walk_max * |axis|`; above that cap it
+  sheds `traction` per frame, never below the cap. Against the current
+  velocity the acceleration is `walk_accel + traction`.
+- **Dash.** Starts at `dash_init` (or the current speed if higher), accelerates
+  by `dash_accel` to `dash_max` while the stick holds the dash direction, else
+  sheds `traction`. After `dash_frames`: Run if the stick still holds that
+  direction, else Skid (or Idle if stopped).
+- **Run.** Accelerates by `run_accel` to `run_max`. Neutral starts a Skid
+  (decelerating by `skid_traction`, ending at speed 0); the opposite
+  direction starts a Turnaround: facing flips at once, momentum sheds at
+  `skid_traction` for `turnaround_frames`, then the entity runs the other way.
+- **Idle** sheds `traction` to zero. Grounded entities are placed on
+  `ground.y`.
+
+Parameters are Fixed data with Smash-like defaults, overridden per entity.
+Jumps, air movement and landing follow in the next change.
+
 ## Rollback support
 
 All simulation state lives in plain, trivially copyable arrays. `snapshot()`
