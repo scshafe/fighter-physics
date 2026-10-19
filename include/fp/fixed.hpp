@@ -9,6 +9,7 @@
 // zero saturates by the numerator's sign, and nothing is undefined behaviour or
 // depends on the platform. Floating point appears only in from_double/to_double.
 
+#include <compare>
 #include <cstdint>
 
 namespace fp {
