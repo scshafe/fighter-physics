@@ -119,7 +119,7 @@ class Reader {
   std::size_t pos_ = 0;
 };
 
-constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 2};  // format, then version
+constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 3};  // format, then version
 
 bool flag(std::uint8_t v) { return v <= 1; }
 
@@ -132,12 +132,23 @@ bool valid(const Config& cfg, const World& w) {
     if (static_cast<std::uint8_t>(p.phase) > static_cast<std::uint8_t>(PlatformPhase::Destroyed)) return false;
     if (p.timer < 0 || p.clock < 0) return false;
   }
+  if (w.placeables.size() > static_cast<std::size_t>(kMaxPlaceables)) return false;
+  for (const Placeable& p : w.placeables) {
+    if (static_cast<std::uint8_t>(p.kind) > static_cast<std::uint8_t>(PlaceableKind::Wall)) return false;
+    if (!flag(p.active) || p.life < 0) return false;
+    if (p.active != 0 && !(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top)) return false;
+    if (p.active == 0 && (p.life != 0 || p.rect.left != Fixed::zero() || p.rect.right != Fixed::zero() ||
+                          p.rect.bottom != Fixed::zero() || p.rect.top != Fixed::zero())) {
+      return false;
+    }
+  }
+  const int nslots = np + static_cast<int>(w.placeables.size());
   for (const EntityState& e : w.entities) {
     if (static_cast<std::uint8_t>(e.mode) > static_cast<std::uint8_t>(Mode::Airborne)) return false;
     if (e.facing != 1 && e.facing != -1) return false;
     if (e.prev_dir < -1 || e.prev_dir > 1) return false;
     if (!flag(e.prev_jump) || !flag(e.fast_falling) || !flag(e.prev_down) || !flag(e.eliminated)) return false;
-    if (e.support < -1 || e.support >= np || e.support_entity < -1 || e.support_entity >= ne) return false;
+    if (e.support < -1 || e.support >= nslots || e.support_entity < -1 || e.support_entity >= ne) return false;
     if (e.frames < 0 || e.jumps_used < 0 || e.drop_timer < 0) return false;
   }
   return true;

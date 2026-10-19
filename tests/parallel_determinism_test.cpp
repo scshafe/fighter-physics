@@ -36,6 +36,7 @@ std::vector<std::pair<std::uint64_t, std::uint64_t>> run(JobSystem* jobs, Totals
   for (int f = 0; f < kFrames; ++f) {
     // The hash is taken before the game respawns anyone, so it sees the step's own result.
     sc.ev.clear();
+    sc.place_walls();
     step(sc.cfg, sc.w, sc.next_intents(), sc.ev, jobs);
     std::uint64_t eh = 0;
     for (const Event& e : sc.ev) {
@@ -64,7 +65,7 @@ int main() {
   // The scenario must actually exercise the interesting paths.
   for (EventType t : {EventType::Landed, EventType::Fell, EventType::Eliminated, EventType::LandedOnEntity,
                       EventType::BumpedEntity, EventType::PlatformShaking, EventType::PlatformCrumbled,
-                      EventType::PlatformRespawned, EventType::PlatformDoomed}) {
+                      EventType::PlatformRespawned, EventType::PlatformDoomed, EventType::PlaceableRemoved}) {
     if (totals.events[t] == 0) {
       std::fprintf(stderr, "scenario never produced event type %d\n", static_cast<int>(t));
       ++fp_test::failures();
@@ -89,7 +90,7 @@ int main() {
 
   // Pinned: the same on Linux and macOS, gcc and clang, debug and release. If the simulation changes on
   // purpose, update it deliberately (the line below prints the new value).
-  CHECK(serial.back().first == 0xdfb4f55ac793a5c4ULL);
+  CHECK(serial.back().first == 0x1bcdfafdb3498820ULL);
   std::printf("final hash %016llx; events: landed %d, fell %d, eliminated %d, on-entity %d, bumped %d, shaking %d, "
               "crumbled %d, respawned %d; entity respawns %d\n",
               static_cast<unsigned long long>(serial.back().first), totals.events[EventType::Landed],

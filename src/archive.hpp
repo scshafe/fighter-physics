@@ -49,11 +49,29 @@ void io_platform(A& a, P& p) {
   a.fx(p.stress);
 }
 
+template <class A, class R>
+void io_rect(A& a, R& r) {
+  a.fx(r.left);
+  a.fx(r.right);
+  a.fx(r.bottom);
+  a.fx(r.top);
+}
+
+template <class A, class P>
+void io_placeable(A& a, P& p) {
+  a.num(p.kind);
+  a.num(p.active);
+  io_rect(a, p.rect);
+  a.num(p.life);
+}
+
 template <class A, class W>
 void io_world(A& a, W& w) {
   a.num(w.frame);
   a.count(w.platforms);
   for (auto& p : w.platforms) io_platform(a, p);
+  a.count(w.placeables);
+  for (auto& p : w.placeables) io_placeable(a, p);
   a.count(w.entities);
   for (auto& e : w.entities) io_entity(a, e);
 }
