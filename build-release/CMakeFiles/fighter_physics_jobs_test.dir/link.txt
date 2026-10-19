@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/fighter_physics_jobs_test.dir/link.d CMakeFiles/fighter_physics_jobs_test.dir/tests/jobs_test.cpp.o -o fighter_physics_jobs_test  libfighter_physics.a
