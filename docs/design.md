@@ -92,7 +92,42 @@ one frame (`include/fp/movement.hpp`). Intents are abstract: `move_x` in
   `ground.y`.
 
 Parameters are Fixed data with Smash-like defaults, overridden per entity.
-Jumps, air movement and landing follow in the next change.
+
+## Jumps and air movement (implemented)
+
+Intents add `jump` (the button held; a *press* is the frame it becomes true,
+tracked in the entity state so rollback needs nothing else) and `fast_fall`.
+
+- **Jump squat.** A press from any ground mode starts a JumpSquat of
+  `jump_squat_frames` (the press frame counts; 1 launches at once). Ground
+  speed sheds `traction` during it. On the last frame the entity launches at
+  `full_hop_vel` if the button is still held, else `short_hop_vel`, keeping
+  `jump_x_retention` of its horizontal speed.
+- **Air.** Horizontal: accelerate by `air_accel_base + air_accel_add * |axis|`
+  toward `air_max * |axis|`; above that cap shed `air_friction` per frame
+  (never below the cap); against the current velocity the acceleration gains
+  `air_friction`; with no input shed `air_friction` toward zero.
+- **Vertical.** Gravity pulls `vel.y` down to `-max_fall` and no further; a
+  speed already beyond the cap is left alone. Fast-fall (once `vel.y <= 0`)
+  sets the fall speed to `-fast_fall` and holds it until landing or an
+  aerial jump.
+- **Aerial jumps.** A press while airborne with fewer than `aerial_jumps`
+  used sets `vel.y = aerial_jump_vel` (that frame has no gravity) and cancels
+  fast-fall. Holding the button never repeats a jump.
+- **Landing.** When falling (`vel.y <= 0`) and the integrated `pos.y <= ground.y`
+  the entity is placed on the ground, `vel.y` zeroed, the aerial jumps are
+  refilled, and the mode is Idle; horizontal speed is kept. (Landing lag
+  belongs with the game's move system.)
+
+## Tests
+
+`tests/*_test.cpp` are plain CTest executables with a small check helper.
+Movement is covered twice: unit tests with exactly representable parameters,
+whose per-frame expectations are worked out by hand, and golden traces
+(`tests/golden/*.txt`, raw Q16.16 per frame, default parameters) that pin the
+whole pipeline. After an intended behaviour change, regenerate the traces
+with `FP_UPDATE_GOLDEN=1 ./build/fighter_physics_golden_test` and review the
+diff.
 
 ## Rollback support
 

@@ -43,14 +43,35 @@ struct MovementParams {
 
   // Ground
   Fixed traction = Fixed::from_double(0.06);    // ground deceleration (friction)
+
+  // Jumps
+  std::int32_t jump_squat_frames = 5;                 // jump squat length (>= 1)
+  Fixed full_hop_vel = Fixed::from_double(2.6);       // full hop initial velocity (up)
+  Fixed short_hop_vel = Fixed::from_double(1.7);      // short hop initial velocity
+  Fixed jump_x_retention = Fixed::from_double(1.0);   // share of ground speed kept on leaving the ground
+  std::int32_t aerial_jumps = 1;                      // aerial (mid-air) jumps
+  Fixed aerial_jump_vel = Fixed::from_double(2.4);    // aerial jump velocity (up)
+
+  // Air
+  Fixed air_accel_base = Fixed::from_double(0.01);    // air acceleration, base
+  Fixed air_accel_add = Fixed::from_double(0.03);     // air acceleration, extra at full tilt
+  Fixed air_max = Fixed::from_double(1.0);            // max air speed (scaled by |axis|)
+  Fixed air_friction = Fixed::from_double(0.01);      // air friction (deceleration)
+
+  // Vertical
+  Fixed gravity = Fixed::from_double(0.095);          // gravity
+  Fixed max_fall = Fixed::from_double(1.5);           // max fall speed
+  Fixed fast_fall = Fixed::from_double(2.4);          // fast-fall speed
 };
 
 // Abstract intents for one frame. A game maps its controls to these.
 struct Intent {
-  Fixed move_x{};  // -1..1; positive is +x. Out-of-range values are clamped.
+  Fixed move_x{};         // -1..1; positive is +x. Out-of-range values are clamped.
+  bool jump = false;      // jump button held; a press is the frame it becomes true
+  bool fast_fall = false; // fast-fall (down) held
 };
 
-enum class Mode : std::uint8_t { Idle, Walk, Dash, Run, Skid, Turnaround };
+enum class Mode : std::uint8_t { Idle, Walk, Dash, Run, Skid, Turnaround, JumpSquat, Airborne };
 
 // All of an entity's simulation state: plain data, no pointers.
 struct EntityState {
@@ -61,9 +82,12 @@ struct EntityState {
   std::int8_t prev_dir = 0;    // stick direction last frame (-1, 0, +1; neutral zone is 0)
   std::uint8_t flick_age = 0;  // frames since the stick left neutral or changed side (saturates)
   std::int32_t frames = 0;     // frames in `mode`, including the current one
+  std::int8_t jumps_used = 0;  // aerial jumps used since leaving the ground
+  std::uint8_t prev_jump = 0;  // jump button last frame (0/1)
+  std::uint8_t fast_falling = 0;  // 0/1
 };
 
-// The ground the entity stands on (flat, for now).
+// The ground the entity stands on (flat, for now). It lands on it from the air.
 struct Ground {
   Fixed y{};
 };

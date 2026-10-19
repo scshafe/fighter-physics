@@ -46,6 +46,8 @@ void step(EntityState& e, const Intent& in, const MovementParams& p, const Groun
     ++e.flick_age;
   }
   e.prev_dir = static_cast<std::int8_t>(dir);
+  const bool jump_pressed = in.jump && e.prev_jump == 0;
+  e.prev_jump = in.jump ? 1 : 0;
   const bool flicked = dir != 0 && ax >= p.dash_threshold && e.flick_age <= p.flick_frames;
 
   auto start_dash = [&] {
@@ -59,6 +61,13 @@ void step(EntityState& e, const Intent& in, const MovementParams& p, const Groun
     enter(e, Mode::Walk);
     e.vel.x = along(max(p.walk_init, along(e.vel.x, dir)), dir);
   };
+
+  // A jump press from any ground mode starts the jump squat on this frame.
+  bool squat_started = false;
+  if (jump_pressed && e.mode <= Mode::Turnaround) {
+    enter(e, Mode::JumpSquat);
+    squat_started = true;
+  }
 
   switch (e.mode) {
     case Mode::Idle:
@@ -139,10 +148,59 @@ void step(EntityState& e, const Intent& in, const MovementParams& p, const Groun
         else enter(e, Mode::Idle);
       }
       break;
+
+    case Mode::JumpSquat:
+      if (!squat_started) ++e.frames;
+      e.vel.x = decelerate(e.vel.x, p.traction);
+      if (e.frames >= p.jump_squat_frames) {
+        // Short hop if the button is no longer held when the squat ends.
+        e.vel.y = in.jump ? p.full_hop_vel : p.short_hop_vel;
+        e.vel.x *= p.jump_x_retention;
+        enter(e, Mode::Airborne);
+        e.jumps_used = 0;
+        e.fast_falling = 0;
+      }
+      break;
+
+    case Mode::Airborne:
+      ++e.frames;
+      // Vertical: an aerial jump replaces gravity for the frame; otherwise
+      // fast-fall (only once not rising) or gravity up to the fall cap. A speed
+      // already beyond the cap is left alone.
+      if (jump_pressed && e.jumps_used < p.aerial_jumps) {
+        e.vel.y = p.aerial_jump_vel;
+        ++e.jumps_used;
+        e.fast_falling = 0;
+      } else if (e.fast_falling != 0 || (in.fast_fall && e.vel.y <= Fixed::zero())) {
+        e.fast_falling = 1;
+        e.vel.y = -p.fast_fall;
+      } else if (e.vel.y > -p.max_fall) {
+        e.vel.y = max(e.vel.y - p.gravity, -p.max_fall);
+      }
+      // Horizontal: accelerate toward air_max * |axis|, shed air_friction above
+      // it, and with no input just shed air_friction.
+      if (dir == 0) {
+        e.vel.x = decelerate(e.vel.x, p.air_friction);
+      } else {
+        const Fixed accel = p.air_accel_base + p.air_accel_add * ax;
+        e.vel.x = along(approach_cap(along(e.vel.x, dir), p.air_max * ax, accel, p.air_friction), dir);
+      }
+      break;
   }
 
   e.pos.x += e.vel.x;
-  e.pos.y = g.y;
+  if (e.mode == Mode::Airborne) {
+    e.pos.y += e.vel.y;
+    if (e.vel.y <= Fixed::zero() && e.pos.y <= g.y) {  // landed
+      e.pos.y = g.y;
+      e.vel.y = Fixed::zero();
+      enter(e, Mode::Idle);
+      e.jumps_used = 0;
+      e.fast_falling = 0;
+    }
+  } else {
+    e.pos.y = g.y;
+  }
 }
 
 }  // namespace fp
