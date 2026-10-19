@@ -208,11 +208,29 @@ entity has moved and met the platforms:
 offset. Contacts in a frame see the platforms as the previous frame left
 them, so an entity's contacts never depend on the order of other entities.
 
-- **Crumble.** `shake_frames > 0`: the frame an entity is found standing on a
-  Solid platform it starts Shaking (still solid) for `shake_frames`, then is
-  Gone for `respawn_frames` (0 = for good), then Solid again. Riders fall when
-  it goes (`Fell`). If it respawns on an entity, the entity is pushed out the
-  shallowest way (usually up and landed).
+- **Crumble by touch.** `shake_frames > 0`: the frame an entity is found
+  standing on a Solid platform it starts Shaking (still solid) for
+  `shake_frames`, then is Gone for `respawn_frames` (0 = for good), then Solid
+  again. Riders fall when it goes (`Fell`). If it respawns on an entity, the
+  entity is pushed out the shallowest way (usually up and landed).
+- **Crumble by stress.** `PlatformDef::stress.shake_at > 0` replaces the
+  touch model with a per-platform stress in [0, 1] (`PlatformState::stress`,
+  part of the snapshot and the hash). Each frame, after the entities have
+  moved, every entity standing on the platform adds `still_rate` (|vel.x| <
+  `still_speed`) or `moving_rate`. An entity on a stack of heads sends its
+  rate down to the platform under the bottom of the stack, times
+  `rider_share` once per head between them. An entity whose feet are on
+  several platforms (same top as its y, body overlapping) splits its rate
+  equally between them. With nobody on it the stress falls by `decay`.
+  Phases follow the level: Solid below `shake_at` (`PlatformShaking` on
+  entering Shaking; back to Solid if it decays), Shaking from `shake_at`,
+  Doomed from `doom_at` (`PlatformDoomed`; sticky, no decay, and the stress
+  also rises by `doom_rate` a frame), and at 1 it is Gone for `respawn_frames`
+  with the stress reset to 0 (`PlatformCrumbled`, riders fall).
+  `add_stress(cfg, world, platform, amount, events)` is the one-off increment
+  (hard landing, stomp) the game calls between steps; it applies the phase
+  changes at once. All rates are Fixed per frame, so the game converts from
+  its per-second table.
 - **Motion.** `move_period` (even) frames for a there-and-back trip of
   `travel` from the rest rectangle, linear. Riders (entities supported by the
   platform) are moved by the platform's displacement.

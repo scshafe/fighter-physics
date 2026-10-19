@@ -25,6 +25,16 @@ enum class PlatformKind : std::uint8_t {
   PassThrough,  // stood on from above only; entities rise through it and can drop through it
 };
 
+struct PlatformStress {
+  Fixed shake_at{}, doom_at{};
+  Fixed still_rate{};   // per entity standing on it with |vel.x| < still_speed
+  Fixed moving_rate{};  // per entity standing on it at or above that speed
+  Fixed still_speed{};
+  Fixed rider_share{};  // of a rider's rate that reaches the platform below a stack, per head
+  Fixed doom_rate{};
+  Fixed decay{};        // per frame while nothing stands on it
+};
+
 struct PlatformDef {
   PlatformKind kind = PlatformKind::Solid;
   Rect rect{};  // the rest position; pass-through platforms use only `top`, `left`, `right`
@@ -40,6 +50,16 @@ struct PlatformDef {
   // shake_frames = 0: never crumbles. respawn_frames = 0: stays gone.
   std::int32_t shake_frames = 0;
   std::int32_t respawn_frames = 0;
+
+  // Crumbling by accumulated stress (instead of by a first touch): when
+  // `stress.shake_at` > 0 the platform carries a stress in [0, 1] that the
+  // entities on it raise every frame, and `shake_frames` is not used.
+  //   stress < shake_at           Solid
+  //   shake_at <= stress < doom_at  Shaking (still solid; falls back to Solid if the stress decays)
+  //   doom_at <= stress < 1         Doomed (still solid; rises by `doom_rate` a frame by itself)
+  //   stress >= 1                   Gone for `respawn_frames` (0 = for good), stress back to 0
+  // All rates are per frame.
+  PlatformStress stress;
 };
 
 struct Stage {
@@ -63,6 +83,7 @@ enum class EventType : std::uint8_t {
   PlatformCrumbled,   // id: platform is gone
   PlatformRespawned,  // id: platform is solid again
   PlatformDestroyed,  // id: platform was destroyed (permanently)
+  PlatformDoomed,     // id: a stress platform passed `doom_at`
 };
 
 struct Event {
@@ -78,6 +99,7 @@ enum class PlatformPhase : std::uint8_t {
   Shaking,    // in play, about to crumble
   Gone,       // crumbled, may respawn
   Destroyed,  // permanently removed
+  Doomed,     // in play, stress keeps rising until it falls
 };
 
 struct PlatformState {
@@ -85,6 +107,7 @@ struct PlatformState {
   std::int32_t timer = 0;  // frames left in Shaking or Gone
   std::int32_t clock = 0;  // position in the motion cycle
   Vec2 offset{};           // current displacement from the rest position
+  Fixed stress{};          // 0..1, platforms with `PlatformDef::stress`
 };
 
 struct World {
@@ -102,6 +125,12 @@ EntityState spawn_on(const Config& cfg, int platform, Fixed x);
 // Destroy a platform for good (a move, a hazard): entities standing on it fall.
 // Appends to `events`; the caller owns clearing it.
 void destroy_platform(const Config& cfg, World& w, int platform, Events& events);
+
+// A one-off increase of a stress platform's stress (a hard landing, a stomp),
+// which a negative amount lowers; clamps to [0, 1] and applies the phase
+// changes at once, so 1 or more crumbles it. No effect on platforms without
+// a stress model, or that are Gone or Destroyed. Appends to `events`.
+void add_stress(const Config& cfg, World& w, int platform, Fixed amount, Events& events);
 
 // Advance the world one frame: per entity motion and contacts, then the
 // platforms (crumble, respawn, motion, carrying their riders). Appends the

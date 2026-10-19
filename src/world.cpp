@@ -35,7 +35,11 @@ bool overlaps_x(const EntityState& e, const MovementParams& p, const Rect& r) no
 
 bool grounded_mode(Mode m) noexcept { return m <= Mode::Turnaround || m == Mode::JumpSquat; }
 
-bool in_play(PlatformPhase ph) noexcept { return ph == PlatformPhase::Solid || ph == PlatformPhase::Shaking; }
+bool in_play(PlatformPhase ph) noexcept {
+  return ph == PlatformPhase::Solid || ph == PlatformPhase::Shaking || ph == PlatformPhase::Doomed;
+}
+
+bool has_stress(const PlatformDef& d) noexcept { return d.stress.shake_at > Fixed::zero(); }
 
 // Resolve one entity's contacts with the platforms after `advance` moved it
 // from `prev`. Platforms are static during contact resolution (they move at
@@ -303,40 +307,118 @@ void resolve_entities(const Config& cfg, World& w, const std::vector<Vec2>& prev
   }
 }
 
+
+// Phase changes that follow from a platform's stress: Shaking and Doomed
+// (which only the fall ends), Gone at 1.
+void settle_stress(const PlatformDef& d, PlatformState& s, int id, World& w, Events& events) {
+  if (s.stress >= Fixed::one()) {
+    s.phase = PlatformPhase::Gone;
+    s.timer = d.respawn_frames;
+    s.stress = Fixed::zero();
+    events.push_back({EventType::PlatformCrumbled, id, -1});
+    release_riders(w, id, events);
+  } else if (d.stress.doom_at > Fixed::zero() && s.stress >= d.stress.doom_at) {
+    if (s.phase != PlatformPhase::Doomed) events.push_back({EventType::PlatformDoomed, id, -1});
+    s.phase = PlatformPhase::Doomed;
+  } else if (s.phase == PlatformPhase::Doomed) {
+    // stays doomed
+  } else if (s.stress >= d.stress.shake_at) {
+    if (s.phase != PlatformPhase::Shaking) events.push_back({EventType::PlatformShaking, id, -1});
+    s.phase = PlatformPhase::Shaking;
+  } else {
+    s.phase = PlatformPhase::Solid;
+  }
+}
+
+// The stress each platform receives this frame, and whether anyone is on it.
+// An entity's rate depends on its speed; one on a stack of heads sends
+// rider_share per head of it down to the platform under the bottom of the
+// stack; an entity whose feet span several platforms splits it equally.
+struct Load {
+  std::vector<Fixed> stress;
+  std::vector<char> occupied;
+};
+
+Load platform_loads(const Config& cfg, const World& w) {
+  const int np = static_cast<int>(cfg.stage.platforms.size());
+  const int n = static_cast<int>(w.entities.size());
+  Load load{std::vector<Fixed>(np), std::vector<char>(np, 0)};
+  const std::vector<View> views = make_views(cfg, w);
+  std::vector<int> feet;
+  for (int a = 0; a < n; ++a) {
+    if (w.entities[a].eliminated != 0) continue;
+    int root = a, depth = 0;
+    while (w.entities[root].support_entity >= 0 && depth < n) {
+      root = w.entities[root].support_entity;
+      ++depth;
+    }
+    const EntityState& r = w.entities[root];
+    if (r.support < 0 || r.eliminated != 0) continue;
+
+    feet.assign(1, r.support);
+    for (int j = 0; j < np; ++j) {
+      if (j != r.support && views[j].active && views[j].rect.top == r.pos.y &&
+          overlaps_x(r, cfg.params[root], views[j].rect)) {
+        feet.push_back(j);
+      }
+    }
+    const PlatformStress& st = cfg.stage.platforms[r.support].stress;
+    const EntityState& e = w.entities[a];
+    Fixed rate = abs(e.vel.x) < st.still_speed ? st.still_rate : st.moving_rate;
+    for (int h = 0; h < depth; ++h) rate = rate * st.rider_share;
+    const Fixed part = rate / Fixed::from_int(static_cast<std::int32_t>(feet.size()));
+    for (int j : feet) {
+      load.occupied[j] = 1;
+      load.stress[j] += part;
+    }
+  }
+  return load;
+}
+
 // Phase 6: crumble timers, respawn, motion; riders move with their platform.
 void update_platforms(const Config& cfg, World& w, Events& events) {
   const int n = static_cast<int>(cfg.stage.platforms.size());
+  const Load load = platform_loads(cfg, w);
   for (int i = 0; i < n; ++i) {
     const PlatformDef& d = cfg.stage.platforms[i];
     PlatformState& s = w.platforms[i];
 
-    bool stood_on = false;
-    for (const EntityState& e : w.entities) stood_on = stood_on || e.support == i;
+    if (has_stress(d) && in_play(s.phase)) {
+      s.stress += load.stress[i];
+      if (s.phase == PlatformPhase::Doomed) s.stress += d.stress.doom_rate;
+      else if (!load.occupied[i]) s.stress = max(s.stress - d.stress.decay, Fixed::zero());
+      s.stress = min(s.stress, Fixed::one());
+      settle_stress(d, s, i, w, events);
+    } else {
+      bool stood_on = false;
+      for (const EntityState& e : w.entities) stood_on = stood_on || e.support == i;
 
-    switch (s.phase) {
-      case PlatformPhase::Solid:
-        if (d.shake_frames > 0 && stood_on) {
-          s.phase = PlatformPhase::Shaking;
-          s.timer = d.shake_frames;
-          events.push_back({EventType::PlatformShaking, i, -1});
-        }
-        break;
-      case PlatformPhase::Shaking:
-        if (--s.timer <= 0) {
-          s.phase = PlatformPhase::Gone;
-          s.timer = d.respawn_frames;
-          events.push_back({EventType::PlatformCrumbled, i, -1});
-          release_riders(w, i, events);
-        }
-        break;
-      case PlatformPhase::Gone:
-        if (d.respawn_frames > 0 && --s.timer <= 0) {
-          s.phase = PlatformPhase::Solid;
-          events.push_back({EventType::PlatformRespawned, i, -1});
-        }
-        break;
-      case PlatformPhase::Destroyed:
-        break;
+      switch (s.phase) {
+        case PlatformPhase::Solid:
+          if (d.shake_frames > 0 && stood_on) {
+            s.phase = PlatformPhase::Shaking;
+            s.timer = d.shake_frames;
+            events.push_back({EventType::PlatformShaking, i, -1});
+          }
+          break;
+        case PlatformPhase::Shaking:
+          if (--s.timer <= 0) {
+            s.phase = PlatformPhase::Gone;
+            s.timer = d.respawn_frames;
+            events.push_back({EventType::PlatformCrumbled, i, -1});
+            release_riders(w, i, events);
+          }
+          break;
+        case PlatformPhase::Gone:
+          if (d.respawn_frames > 0 && --s.timer <= 0) {
+            s.phase = PlatformPhase::Solid;
+            events.push_back({EventType::PlatformRespawned, i, -1});
+          }
+          break;
+        case PlatformPhase::Doomed:  // only stress platforms get here, and those take the other branch
+        case PlatformPhase::Destroyed:
+          break;
+      }
     }
 
     if (d.move_period > 0) {
@@ -372,6 +454,14 @@ void destroy_platform(const Config&, World& w, int platform, Events& events) {
   s.timer = 0;
   events.push_back({EventType::PlatformDestroyed, platform, -1});
   if (was_in_play) release_riders(w, platform, events);
+}
+
+void add_stress(const Config& cfg, World& w, int platform, Fixed amount, Events& events) {
+  const PlatformDef& d = cfg.stage.platforms[platform];
+  PlatformState& s = w.platforms[platform];
+  if (!has_stress(d) || !in_play(s.phase)) return;
+  s.stress = clamp(s.stress + amount, Fixed::zero(), Fixed::one());
+  settle_stress(d, s, platform, w, events);
 }
 
 void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& events, JobSystem* jobs) {

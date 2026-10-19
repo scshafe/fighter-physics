@@ -36,7 +36,9 @@ inline Config make_config(int entities) {
   mover.travel = Vec2::from_double(0, 30);
   mover.move_period = 120;
   PlatformDef wall = solid(100, 104, 0, 40);
-  PlatformDef far_floor = solid(94, 140, -10, 0);
+  PlatformDef far_floor = solid(94, 140, -10, 0);  // crumbles by stress
+  far_floor.respawn_frames = 40;
+  far_floor.stress = {F(0.2), F(0.5), F(0.02), F(0.01), F(0.5), F(0.5), F(0.01), F(0.005)};
   c.stage.platforms = {floor, shelf, crumble, mover, wall, far_floor};
   c.stage.blast = {F(-140), F(150), F(-40), F(120)};
   c.params.assign(entities, MovementParams{});

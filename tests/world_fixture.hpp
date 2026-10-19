@@ -45,8 +45,14 @@ MovementParams params() {
   return p;
 }
 
-PlatformDef solid(double l, double r, double b, double t) { return {PlatformKind::Solid, {F(l), F(r), F(b), F(t)}}; }
-PlatformDef thin(double l, double r, double t) { return {PlatformKind::PassThrough, {F(l), F(r), F(t - 1), F(t)}}; }
+PlatformDef platform(PlatformKind k, Rect r) {
+  PlatformDef d;
+  d.kind = k;
+  d.rect = r;
+  return d;
+}
+PlatformDef solid(double l, double r, double b, double t) { return platform(PlatformKind::Solid, {F(l), F(r), F(b), F(t)}); }
+PlatformDef thin(double l, double r, double t) { return platform(PlatformKind::PassThrough, {F(l), F(r), F(t - 1), F(t)}); }
 
 Config config(std::vector<PlatformDef> platforms, int entities = 1) {
   Config c;
