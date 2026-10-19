@@ -30,4 +30,5 @@ if(BUILD_TESTING)
 
   fp_add_test(smoke)
   fp_add_test(fixed)
+  fp_add_test(vec2)
 endif()
