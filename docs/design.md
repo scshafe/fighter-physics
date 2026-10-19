@@ -265,6 +265,14 @@ placeable slots. `EntityState::support` and `Landed.other` name a wall as
   below 1); the engine treats them alike. The patch is read from where the
   entity stood at the start of the frame, so patches never depend on the order
   of entities.
+- **Spring.** A pad: after an entity's own motion and platform contacts, if it
+  is on the ground (any grounded mode) with its feet in the rect, it is put in
+  the air with `vel.y = launch.y` and `vel.x += launch.x` and `Sprung` (id:
+  entity, other: slot) is emitted; a landing on the pad springs on the same
+  frame. The lowest slot under the feet acts. `launch.y` must be positive
+  (checked by `place` and `restore`), so the entity leaves the pad and does not
+  spring until it lands again. Landing on another entity's head is not ground
+  here.
 
 ## Tests
 
@@ -349,7 +357,8 @@ assets. Those belong to the game (ledgefall) or to netplay-kit.
 5. Done: snapshot, restore and hash, with a rollback benchmark.
 6. Done: the macOS CI job and the cross-platform determinism check.
 
-Next, not yet designed: placeable objects that change mobility (walls, slick
-and sticky patches, springs; the brief asks for them), slopes, landing lag and
-other move-driven state that belongs with the game's move system, and a faster
-job system if the entity count ever needs it.
+7. Done: crumbling by accumulated stress, and placeables (walls, slick and sticky patches, springs).
+
+Next, only if the game's rules need them: entity weight, slopes, landing lag
+and other move-driven state that belongs with the game's move system, and a
+faster job system if the entity count ever needs it.

@@ -82,7 +82,7 @@ class Scenario {
     return intents_;
   }
 
-  // The game's placements (walls, and ice and mud on the floor): a function of the frame, so replays from a snapshot repeat them.
+  // The game's placements (walls, ice, mud and springs): a function of the frame, so replays from a snapshot repeat them.
   void place_scheduled() {
     if (w.frame % 60 == 20) {
       const double x = -40.0 + 4.0 * static_cast<double>((w.frame / 60) % 10);
@@ -100,6 +100,14 @@ class Scenario {
       patch.traction_scale = ice ? F(0.25) : F(3);
       patch.speed_scale = ice ? F(1) : F(0.5);
       place(w, patch);
+    }
+    if (w.frame % 100 == 50) {
+      Placeable pad;
+      pad.kind = PlaceableKind::Spring;
+      pad.rect = {F(-20), F(-14), F(-1), F(0)};
+      pad.life = 80;
+      pad.launch = Vec2::from_double(0.5, 2.5);
+      place(w, pad);
     }
   }
 

@@ -43,7 +43,7 @@ void test_round_trip_and_bytes() {
   std::printf("snapshot of 48 entities, 6 platforms: %zu bytes (%.1f per entity)\n", a.size(), a.size() / 48.0);
   CHECK(a.size() < 48 * 64 + 256);
   // Pinned (Linux and macOS, gcc and clang must write the same bytes).
-  CHECK(bytes_hash(a) == 0x577a76ced5fdd60bULL);
+  CHECK(bytes_hash(a) == 0xc078fc298c950b23ULL);
 }
 
 // Rewind a live world and replay: same hashes as the first time, for serial and parallel replay.

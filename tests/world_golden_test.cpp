@@ -23,7 +23,7 @@ const char* mode_name(Mode m) {
 const char* event_name(EventType t) {
   static const char* names[] = {"Landed",          "Fell",           "Eliminated",       "LandedOnEntity",
                                 "BumpedEntity",    "PlatformShaking", "PlatformCrumbled", "PlatformRespawned",
-                                "PlatformDestroyed", "PlatformDoomed", "PlaceableRemoved"};
+                                "PlatformDestroyed", "PlatformDoomed", "PlaceableRemoved", "Sprung"};
   return names[static_cast<int>(t)];
 }
 
@@ -135,6 +135,24 @@ int main() {
                      place(w, patch(PlaceableKind::Sticky, 120, 190, 3.0, 0.5));
                    }
                    in.move_x = f <= 40 ? F(1) : F(0);
+                 }));
+  }
+  // Walk onto a spring pad [40, 60] (launch (0, 1.5)) and bounce on it with no input; the
+  // pad is taken away at frame 80, so the next landing is on the floor.
+  {
+    Config c = floor_stage();
+    check_golden("spring_bounce", trace(c, spawn_on(c, 0, F(30)), 140, [&](int f, World& w, Intent& in) {
+                   if (f == 1) {
+                     Placeable pad = block(40, 60, -1, 0);
+                     pad.kind = PlaceableKind::Spring;
+                     pad.launch = Vec2::from_double(0, 1.5);
+                     place(w, pad);
+                   }
+                   if (f == 80) {
+                     Events ev;
+                     remove_placeable(c, w, 0, ev);
+                   }
+                   in.move_x = f <= 23 ? F(0.5) : F(0);
                  }));
   }
   return fp_test::finish();

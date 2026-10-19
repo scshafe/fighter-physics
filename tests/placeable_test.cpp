@@ -1,4 +1,4 @@
-// Placeables: walls and ground patches. Hand-worked numbers, as in world_test.cpp. The floor is
+// Placeables: walls, ground patches and springs. Hand-worked numbers, as in world_test.cpp. The floor is
 // [-100, 100] x [-10, 0], so a wall's platform id is 1 + its slot.
 #include "world_fixture.hpp"
 
@@ -212,9 +212,77 @@ void test_patch_slots() {
   CHECK(w.placeables[0].traction_scale == Fixed::one() && w.placeables[0].active == 0);
 }
 
+Placeable spring(double l, double r, double vx, double vy) {
+  Placeable p = wall(l, r, -1, 0);
+  p.kind = PlaceableKind::Spring;
+  p.launch = Vec2::from_double(vx, vy);
+  return p;
+}
+
+bool has_other(const Events& ev, EventType t, int id, int other) {
+  for (const Event& e : ev)
+    if (e.type == t && e.id == id && e.other == other) return true;
+  return false;
+}
+
+// Standing on a pad (feet at y=0, in its rect): launched on the first step with vel (0.5, 3);
+// then it flies, falls back on the pad and is launched again. Outside the rect nothing.
+void test_spring() {
+  Config c = stage();
+  Runner r(c, spawn_on(c, 0, F(12)));
+  CHECK_EQ(place(r.w, spring(10, 14, 0.5, 3)), 0);
+  r.step();
+  CHECK(r.e().mode == Mode::Airborne && r.e().vel.y == F(3) && r.e().vel.x == F(0.5) && r.e().support == -1);
+  CHECK(has_other(r.ev, EventType::Sprung, 0, 0) && !r.has(EventType::Fell));
+  r.step();
+  CHECK(r.e().pos.y > F(2) && r.ev.empty());
+  // Straight up it comes back down on the pad: rising 3 -> 0 takes 12 frames, falling at most
+  // 1 a frame; it springs again within 40 frames, and again.
+  Runner up(c, spawn_on(c, 0, F(12)));
+  place(up.w, spring(10, 14, 0, 3));
+  int launches = 0;
+  for (int i = 0; i < 120; ++i) {
+    up.step();
+    if (has_other(up.ev, EventType::Sprung, 0, 0)) ++launches;
+  }
+  CHECK(launches >= 3 && up.e().pos.x == F(12));
+
+  Runner off(c, spawn_on(c, 0, F(20)));
+  place(off.w, spring(10, 14, 0.5, 3));
+  off.step();
+  CHECK(off.e().mode == Mode::Idle && off.ev.empty());
+}
+
+// Landing on a pad launches on the same step; in the air above it nothing happens; of two
+// overlapping pads the lower slot acts.
+void test_spring_landing_and_order() {
+  Config c = stage();
+  Runner r(c, air(12, 1, 0, -2));
+  place(r.w, spring(10, 14, 0, 2));
+  place(r.w, spring(10, 14, 0, 5));
+  r.step();  // lands at y=0 and springs
+  CHECK(r.has(EventType::Landed, 0) && has_other(r.ev, EventType::Sprung, 0, 0));
+  CHECK(r.e().vel.y == F(2) && r.e().mode == Mode::Airborne);
+
+  Runner high(c, air(12, 10, 0, 0));
+  place(high.w, spring(10, 14, 0, 2));
+  high.step();
+  CHECK(high.ev.empty() && high.e().pos.y < F(10));
+}
+
+void test_spring_slots() {
+  World w = make_world(stage());
+  CHECK_EQ(place(w, spring(0, 4, 0, 0)), -1);
+  CHECK_EQ(place(w, spring(0, 4, 1, -1)), -1);
+  CHECK_EQ(place(w, spring(0, 4, 0, 1)), 0);
+}
+
 }  // namespace
 
 int main() {
+  test_spring();
+  test_spring_landing_and_order();
+  test_spring_slots();
   test_traction_patches();
   test_patches_multiply();
   test_speed_patch();

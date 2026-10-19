@@ -65,7 +65,7 @@ int main() {
   // The scenario must actually exercise the interesting paths.
   for (EventType t : {EventType::Landed, EventType::Fell, EventType::Eliminated, EventType::LandedOnEntity,
                       EventType::BumpedEntity, EventType::PlatformShaking, EventType::PlatformCrumbled,
-                      EventType::PlatformRespawned, EventType::PlatformDoomed, EventType::PlaceableRemoved}) {
+                      EventType::PlatformRespawned, EventType::PlatformDoomed, EventType::PlaceableRemoved, EventType::Sprung}) {
     if (totals.events[t] == 0) {
       std::fprintf(stderr, "scenario never produced event type %d\n", static_cast<int>(t));
       ++fp_test::failures();
@@ -90,7 +90,7 @@ int main() {
 
   // Pinned: the same on Linux and macOS, gcc and clang, debug and release. If the simulation changes on
   // purpose, update it deliberately (the line below prints the new value).
-  CHECK(serial.back().first == 0xb47be007ef821322ULL);
+  CHECK(serial.back().first == 0x5707871cc3ad8a4fULL);
   std::printf("final hash %016llx; events: landed %d, fell %d, eliminated %d, on-entity %d, bumped %d, shaking %d, "
               "crumbled %d, respawned %d; entity respawns %d\n",
               static_cast<unsigned long long>(serial.back().first), totals.events[EventType::Landed],

@@ -83,6 +83,7 @@ enum class PlaceableKind : std::uint8_t {
   Wall,    // a solid block: stood on, walked into, bumped from below, like a Solid platform
   Slick,   // a patch of ground: friction scaled by `traction_scale` (ice: below 1)
   Sticky,  // a patch of ground: friction scaled up and ground speed caps by `speed_scale` (mud: above 1, below 1)
+  Spring,  // a pad: launches an entity that is on the ground with its feet in the rect
 };
 
 constexpr int kMaxPlaceables = 64;
@@ -100,6 +101,13 @@ struct Placeable {
   // the same way and differ only in the label the game sees (and its typical values).
   Fixed traction_scale = Fixed::one();
   Fixed speed_scale = Fixed::one();
+
+  // Spring: an entity on the ground (any grounded mode) with its feet in the rect, after its
+  // own motion and contacts that frame, is put in the air with vel.y = launch.y and vel.x
+  // increased by launch.x; `Sprung` (id: entity, other: slot). Its aerial jumps are untouched.
+  // Only the lowest-numbered spring under the feet acts. launch.y must be > 0 (so the
+  // entity leaves the pad and does not spring again until it lands).
+  Vec2 launch{};
 };
 
 enum class EventType : std::uint8_t {
@@ -114,6 +122,7 @@ enum class EventType : std::uint8_t {
   PlatformDestroyed,  // id: platform was destroyed (permanently)
   PlatformDoomed,     // id: a stress platform passed `doom_at`
   PlaceableRemoved,   // id: placeable slot, expired or removed
+  Sprung,             // id: entity launched by the spring in slot `other`
 };
 
 struct Event {
@@ -155,7 +164,7 @@ EntityState spawn_on(const Config& cfg, int platform, Fixed x);
 
 // Put a placeable on the stage in the lowest free slot (a new one if none is
 // free); returns the slot, or -1 if all kMaxPlaceables slots are taken or the
-// rect is empty or inverted, or a scale is negative. `p.life` > 0 makes it expire after that many
+// rect is empty or inverted, a scale is negative or a spring does not launch upward. `p.life` > 0 makes it expire after that many
 // frames. An entity it lands on is pushed out the shallowest way on the next step.
 int place(World& w, Placeable p);
 
