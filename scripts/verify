@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # The repository's one verify command (dev.toml [verify]): configure, build
-# and run every test with CMake and CTest. CI runs the same command.
+# and run every test with CMake and CTest, in Debug and in Release. CI runs the
+# same command on Linux (gcc and clang) and macOS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
+# The determinism contract must hold at every optimisation level: the same tests
+# again, optimised (their pinned hashes are the cross-platform check).
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release --parallel
+ctest --test-dir build-release --output-on-failure

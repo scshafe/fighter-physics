@@ -16,9 +16,22 @@ Decided in `docs/decisions/0001-number-representation.md`: all simulation
 state is fixed-point, `fp::Fixed` (Q16.16 in an `int32_t`). Products of two
 quantities that are not Q16.16 (dot, cross, squared distance) return
 `fp::Wide` (Q32.32 in an `int64_t`) so they cannot overflow into saturation.
-Floats appear only in explicit edge conversions. A cross-platform
-determinism test runs the same scenario on Linux (here and in CI) and on
-macOS (CI) and compares state hashes.
+Floats appear only in explicit edge conversions.
+
+How the claim is kept honest (all run by `./scripts/verify` and in CI):
+
+- `scripts/check-no-float` (a CTest test) fails if `float`, `double` or the
+  math library appears in `include/` or `src/` outside the edge conversions
+  in `fixed.hpp` and `vec2.hpp`.
+- Pinned values that every platform must reproduce: the movement golden
+  traces, the state hash of a sample world, the snapshot bytes, the final
+  hash of the busy 48-entity scenario, and `tests/golden/determinism_hashes.txt`,
+  that scenario's hash every 25 frames (a divergence names the first frame at
+  which a platform differs).
+- `./scripts/verify` builds and runs everything twice, Debug and Release, and
+  CI runs it on Linux with gcc and with clang and on macOS (arm64, clang).
+- The parallel step is compared with the serial step on every frame for 1, 2,
+  3, 4, 5 and 8 workers.
 
 ## The step
 
@@ -279,11 +292,16 @@ loops are not the cost at these sizes.
 Rendering, input devices, audio, networking, game rules (stocks, scoring) and
 assets. Those belong to the game (ledgefall) or to netplay-kit.
 
-## First milestones
+## Milestones
 
-1. The fixed-point scalar and vector types, with exhaustive tests.
-2. One entity on flat ground with the full movement table, plus golden-trace tests.
-3. Platforms (solid, pass-through, crumbling, respawning) and contacts.
-4. The job system and the deterministic parallel step: hash equality across worker counts.
-5. Snapshot, restore and hash, with a rollback benchmark.
-6. The macOS CI job and the cross-platform determinism check.
+1. Done: the fixed-point scalar and vector types, with exhaustive tests.
+2. Done: one entity on flat ground and in the air with the full movement table, plus golden traces.
+3. Done: platforms (solid, pass-through, moving, crumbling, respawning, destroyed) and contacts, including vertical-only body contact between entities.
+4. Done: the job system and the deterministic parallel step: hash equality across worker counts.
+5. Done: snapshot, restore and hash, with a rollback benchmark.
+6. Done: the macOS CI job and the cross-platform determinism check.
+
+Next, not yet designed: placeable objects that change mobility (walls, slick
+and sticky patches, springs; the brief asks for them), slopes, landing lag and
+other move-driven state that belongs with the game's move system, and a faster
+job system if the entity count ever needs it.

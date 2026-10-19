@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# The simulation uses no floating point (docs/decisions/0001-number-representation.md):
+# only the explicit edge conversions in fixed.hpp and vec2.hpp may mention float or
+# double, and nothing may use the math library. A CTest test runs this.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+bad=$(grep -rnE '\b(float|double)\b|<cmath>|<math\.h>|std::(sin|cos|tan|atan2?|sqrt|pow|exp|log|floor|ceil|round|trunc|fma|fmod|hypot)\b' include src \
+  | grep -vE '^(include/fp/fixed\.hpp|include/fp/vec2\.hpp):' || true)
+if [ -n "$bad" ]; then
+  echo "floating point outside the edge conversions:" >&2
+  echo "$bad" >&2
+  exit 1
+fi
