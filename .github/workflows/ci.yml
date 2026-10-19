@@ -24,12 +24,19 @@ concurrency:
 
 jobs:
   verify:
-    name: verify (${{ matrix.os }})
+    name: verify (${{ matrix.os }}${{ matrix.cxx && format(', {0}', matrix.cxx) || '' }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+          # The determinism contract is across compilers too: Linux with clang as well as gcc.
+          - os: ubuntu-latest
+            cxx: clang++
     runs-on: ${{ matrix.os }}
+    env:
+      CXX: ${{ matrix.cxx || 'c++' }}
     timeout-minutes: 60
     steps:
       # actions/checkout v7.0.1

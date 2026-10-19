@@ -36,6 +36,8 @@ if(BUILD_TESTING)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
       target_compile_options(fighter_physics_${name}_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
+    target_compile_definitions(fighter_physics_${name}_test PRIVATE
+      FP_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden")
     add_test(NAME fighter_physics_${name} COMMAND fighter_physics_${name}_test)
   endfunction()
 
@@ -51,7 +53,7 @@ if(BUILD_TESTING)
   fp_add_test(jobs)
   fp_add_test(parallel_determinism)
   fp_add_test(rollback)
+  fp_add_test(determinism_trace)
+  add_test(NAME fighter_physics_no_float COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check-no-float)
   fp_add_test(golden)
-  target_compile_definitions(fighter_physics_golden_test PRIVATE
-    FP_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden")
 endif()
