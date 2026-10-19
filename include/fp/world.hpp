@@ -55,6 +55,8 @@ enum class EventType : std::uint8_t {
   Landed,             // id: entity, other: platform it landed on
   Fell,               // id: entity left its support (walked off, drop-through, platform vanished)
   Eliminated,         // id: entity left the blast zone
+  LandedOnEntity,     // id: entity landed on the head of entity `other`
+  BumpedEntity,       // id: entity rising hit the underside of entity `other`
   PlatformShaking,    // id: platform started to crumble
   PlatformCrumbled,   // id: platform is gone
   PlatformRespawned,  // id: platform is solid again

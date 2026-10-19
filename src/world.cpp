@@ -121,7 +121,8 @@ void resolve_platforms(const std::vector<View>& views, EntityState& e, const Mov
       const Rect& r = views[e.support].rect;
       ok = overlaps_x(e, p, r) && e.pos.y == r.top;
     }
-    if (!ok) {
+    // Standing on another entity is validated once all entities have moved.
+    if (!ok && e.support_entity < 0) {
       start_fall(e);
       e.support = -1;
       events.push_back({EventType::Fell, id, -1});
@@ -157,11 +158,125 @@ void release_riders(World& w, int platform, Events& events) {
   }
 }
 
+// Move the entities standing on `platform`, and those standing on them, by `delta`.
+void carry(World& w, int platform, Vec2 delta) {
+  const int n = static_cast<int>(w.entities.size());
+  std::vector<char> moved(n, 0);
+  for (int id = 0; id < n; ++id) {
+    if (w.entities[id].support == platform) {
+      w.entities[id].pos += delta;
+      moved[id] = 1;
+    }
+  }
+  for (int round = 0; round < n; ++round) {
+    for (int id = 0; id < n; ++id) {
+      const int under = w.entities[id].support_entity;
+      if (!moved[id] && under >= 0 && moved[under]) {
+        w.entities[id].pos += delta;
+        moved[id] = 1;
+      }
+    }
+  }
+}
+
 Vec2 motion_offset(const PlatformDef& d, std::int32_t clock) {
   const std::int32_t half = d.move_period / 2;
   const std::int32_t t = clock <= half ? clock : d.move_period - clock;
   const Fixed f = Fixed::from_int(t) / Fixed::from_int(half);
   return d.travel * f;
+}
+
+// Phase 5b: vertical contact between bodies. Players pass through each other
+// side to side; landing on a head, bumping an underside and standing on a head
+// matter. Decisions read the positions after every entity's own motion and
+// platform contacts (`pos1`) and the positions before them (`prev`), and write
+// only the deciding entity, so they do not depend on processing order.
+void resolve_entities(const Config& cfg, World& w, const std::vector<Vec2>& prev, Events& events) {
+  const int n = static_cast<int>(w.entities.size());
+  const std::vector<Vec2> pos1 = [&] {
+    std::vector<Vec2> v(n);
+    for (int i = 0; i < n; ++i) v[i] = w.entities[i].pos;
+    return v;
+  }();
+  auto overlaps = [&](int a, int b) {
+    const Fixed reach = cfg.params[a].body_half_width + cfg.params[b].body_half_width;
+    return abs(pos1[a].x - pos1[b].x) < reach;
+  };
+
+  // b is carried by a: it stands on a, or on something that does. Reads the
+  // support before this pass (landings below change it).
+  std::vector<int> under0(n);
+  for (int i = 0; i < n; ++i) under0[i] = w.entities[i].support_entity;
+  auto rides = [&](int b, int a) {
+    for (int hops = 0; hops < n && b >= 0; ++hops) {
+      b = under0[b];
+      if (b == a) return true;
+    }
+    return false;
+  };
+
+  for (int a = 0; a < n; ++a) {
+    EntityState& e = w.entities[a];
+    if (e.eliminated != 0 || e.mode != Mode::Airborne) continue;
+    const Fixed ha = cfg.params[a].body_height;
+    int land_on = -1, bump = -1;
+    Fixed best{};
+    for (int b = 0; b < n; ++b) {
+      if (b == a || w.entities[b].eliminated != 0 || !overlaps(a, b) || rides(b, a)) continue;
+      const Fixed hb = cfg.params[b].body_height;
+      if (pos1[a].y <= prev[a].y) {
+        const Fixed top = pos1[b].y + hb;
+        if (prev[a].y >= prev[b].y + hb && pos1[a].y <= top && (land_on < 0 || top > best)) {
+          land_on = b;
+          best = top;
+        }
+      } else {
+        const Fixed under = pos1[b].y;
+        if (prev[a].y + ha <= prev[b].y && pos1[a].y + ha > under && (bump < 0 || under < best)) {
+          bump = b;
+          best = under;
+        }
+      }
+    }
+    if (land_on >= 0) {
+      e.pos.y = best;
+      land(e);
+      e.support_entity = static_cast<std::int16_t>(land_on);
+      events.push_back({EventType::LandedOnEntity, a, land_on});
+    } else if (bump >= 0) {
+      e.pos.y = best - ha;
+      e.vel.y = Fixed::zero();
+      events.push_back({EventType::BumpedEntity, a, bump});
+    }
+  }
+
+  // Riders follow the head they stand on. Each round reads the previous
+  // round's heights, so a stack settles from the bottom up in at most n rounds
+  // whatever the order of the entities; a rider whose carrier moved out from
+  // under it, or was eliminated, falls.
+  for (int round = 0; round < n; ++round) {
+    std::vector<Fixed> snapshot(n);
+    for (int i = 0; i < n; ++i) snapshot[i] = w.entities[i].pos.y;
+    bool changed = false;
+    for (int a = 0; a < n; ++a) {
+      EntityState& e = w.entities[a];
+      const int b = e.support_entity;
+      if (b < 0) continue;
+      if (w.entities[b].eliminated != 0 || !overlaps(a, b)) {
+        start_fall(e);
+        e.support_entity = -1;
+        events.push_back({EventType::Fell, a, -1});
+        changed = true;
+        continue;
+      }
+      const Fixed y = snapshot[b] + cfg.params[b].body_height;
+      if (e.pos.y != y) {
+        e.pos.y = y;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
 }
 
 // Phase 6: crumble timers, respawn, motion; riders move with their platform.
@@ -205,10 +320,7 @@ void update_platforms(const Config& cfg, World& w, Events& events) {
       const Vec2 next = motion_offset(d, s.clock);
       const Vec2 delta = next - s.offset;
       s.offset = next;
-      if (in_play(s.phase)) {
-        for (EntityState& e : w.entities)
-          if (e.support == i) e.pos += delta;
-      }
+      if (in_play(s.phase)) carry(w, i, delta);
     }
   }
 }
@@ -241,8 +353,10 @@ void destroy_platform(const Config&, World& w, int platform, Events& events) {
 void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& events) {
   const std::vector<View> views = make_views(cfg, w);
   const int n = static_cast<int>(w.entities.size());
+  std::vector<Vec2> prev_pos(n);
   for (int id = 0; id < n; ++id) {
     EntityState& e = w.entities[id];
+    prev_pos[id] = e.pos;
     if (e.eliminated != 0) continue;
     const MovementParams& p = cfg.params[id];
     const Intent& in = intents[id];
@@ -258,7 +372,10 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
 
     const Vec2 prev = e.pos;
     advance(e, in, p);
-    if (e.mode == Mode::Airborne) e.support = -1;  // jumped off
+    if (e.mode == Mode::Airborne) {  // jumped off
+      e.support = -1;
+      e.support_entity = -1;
+    }
     resolve_platforms(views, e, p, prev, id, events);
     if (e.drop_timer > 0) --e.drop_timer;
 
@@ -266,9 +383,11 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
     if (e.pos.x < b.left || e.pos.x > b.right || e.pos.y < b.bottom || e.pos.y > b.top) {
       e.eliminated = 1;
       e.support = -1;
+      e.support_entity = -1;
       events.push_back({EventType::Eliminated, id, -1});
     }
   }
+  resolve_entities(cfg, w, prev_pos, events);
   update_platforms(cfg, w, events);
   ++w.frame;
 }
