@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_library(fighter_physics src/version.cpp src/movement.cpp src/world.cpp)
+add_library(fighter_physics src/version.cpp src/movement.cpp src/world.cpp src/state.cpp)
 add_library(fp::fighter_physics ALIAS fighter_physics)
 target_include_directories(fighter_physics PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -36,6 +36,7 @@ if(BUILD_TESTING)
   fp_add_test(world)
   fp_add_test(platform)
   fp_add_test(entity_contact)
+  fp_add_test(state_hash)
   fp_add_test(golden)
   target_compile_definitions(fighter_physics_golden_test PRIVATE
     FP_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden")
