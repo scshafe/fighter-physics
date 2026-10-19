@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/fighter_physics_rollback_test.dir/link.d CMakeFiles/fighter_physics_rollback_test.dir/tests/rollback_test.cpp.o -o fighter_physics_rollback_test  libfighter_physics.a

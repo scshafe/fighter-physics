@@ -18,8 +18,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(fighter_physics PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 
+# The rollback benchmark: not a test; the CTest entry only checks that it runs.
+add_executable(fighter_physics_rollback_bench bench/rollback_bench.cpp)
+target_link_libraries(fighter_physics_rollback_bench PRIVATE fp::fighter_physics)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(fighter_physics_rollback_bench PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
+  add_test(NAME fighter_physics_rollback_bench_smoke COMMAND fighter_physics_rollback_bench --quick)
+
   # Plain CTest executables, one per tests/<name>_test.cpp.
   function(fp_add_test name)
     add_executable(fighter_physics_${name}_test tests/${name}_test.cpp)
@@ -41,6 +50,7 @@ if(BUILD_TESTING)
   fp_add_test(state_hash)
   fp_add_test(jobs)
   fp_add_test(parallel_determinism)
+  fp_add_test(rollback)
   fp_add_test(golden)
   target_compile_definitions(fighter_physics_golden_test PRIVATE
     FP_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden")

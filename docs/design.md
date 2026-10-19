@@ -236,12 +236,43 @@ platform. The fields are listed once, in `src/archive.hpp`, and visited by
 disagree about what the state is. Tests flip every field and require the hash
 to change, and pin a value that CI checks on Linux and macOS.
 
-## Rollback support
+## Rollback support (implemented: `include/fp/state.hpp`)
 
-All simulation state lives in plain, trivially copyable arrays. `snapshot()`
-writes it into a byte buffer, `restore()` reads it back, and `hash()` gives a
-stable 64-bit hash. Re-simulating N frames from a snapshot is the operation
-netcode needs, so its cost is measured by a benchmark.
+All simulation state is plain data in `World` (vectors of trivially copyable
+structs); config is not state. `snapshot(world, bytes)` writes it as
+platform-independent little-endian bytes (a 4-byte header, then the fields of
+`src/archive.hpp`: about 37 bytes per entity), `restore(cfg, world, bytes)`
+reads it back, and `hash(world)` gives the 64-bit hash. `restore` is the
+trust boundary for resyncs: it checks the header, the length, the counts
+against the config, and every enum, flag and index, and it leaves the world
+untouched on failure. The ring of snapshots, input history and the decision of
+when to roll back belong to netplay-kit's session; the engine guarantees that
+restoring a snapshot and replaying the same inputs reproduces the original run
+bit for bit, for any worker count (`tests/rollback_test.cpp`: replay from a
+snapshot, repeated 8-frame rollbacks, byte-level mutation of snapshots,
+a pinned snapshot hash checked on Linux and macOS).
+
+### Cost (`bench/rollback_bench.cpp`)
+
+Release build, gcc, AMD Ryzen 5 5600G (12 threads); indicative only, rerun on
+the target machines. Times in microseconds.
+
+| Entities | Workers | Snapshot | Restore | Hash | Step | Rollback of 8 frames (restore, 8 steps, hash) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 8 | 1 | 0.7 | 0.1 | 0.3 | 0.6 | 6 |
+| 8 | 4 | 0.7 | 0.1 | 0.4 | 24 | 254 |
+| 48 | 1 | 3.1 | 0.5 | 1.6 | 6.7 | 68 |
+| 48 | 4 | 3.2 | 0.5 | 1.6 | 51 | 459 |
+| 256 | 1 | 15.8 | 2.3 | 8.3 | 109 | 1616 |
+| 256 | 4 | 16.0 | 2.4 | 8.3 | 125 | 1307 |
+
+Rolling back 8 frames is negligible (0.04% of a 60 fps frame) at fighter-game
+sizes, so the serial step is the right default there. The parallel step only
+starts to pay off in the hundreds of entities: each parallel phase costs a
+thread wake-up (about 6-12 us), and the step has four. The job system could
+spin briefly before blocking to cut that; it is not done because nothing needs
+it yet. There is no broadphase for the same reason: the brute-force contact
+loops are not the cost at these sizes.
 
 ## Out of scope
 
