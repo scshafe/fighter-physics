@@ -10,16 +10,15 @@ A C++20 static library, `fp::fighter_physics`, consumed with CMake
 (`FetchContent` at a pinned commit, or `add_subdirectory`). Headers in
 `include/fp/`, sources in `src/`, tests in `tests/` run by CTest.
 
-## Determinism (decide first)
+## Determinism
 
-Floating point is the main risk. The same C++ can round differently across
-x86_64 and arm64, compilers, fused multiply-add and library math functions.
-The starting proposal is **fixed-point arithmetic**, such as a Q32.32 or
-Q16.16 scalar type with explicit rounding, for all simulation state, with
-floats only at the edges (rendering, tools). Record the choice and the
-alternative considered (strict IEEE float with FMA off and no libm) in a
-decision. A cross-platform determinism test runs the same scenario on Linux
-(here and in CI) and on macOS (CI) and compares state hashes.
+Decided in `docs/decisions/0001-number-representation.md`: all simulation
+state is fixed-point, `fp::Fixed` (Q16.16 in an `int32_t`). Products of two
+quantities that are not Q16.16 (dot, cross, squared distance) return
+`fp::Wide` (Q32.32 in an `int64_t`) so they cannot overflow into saturation.
+Floats appear only in explicit edge conversions. A cross-platform
+determinism test runs the same scenario on Linux (here and in CI) and on
+macOS (CI) and compares state hashes.
 
 ## The step
 
