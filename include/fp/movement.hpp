@@ -62,13 +62,20 @@ struct MovementParams {
   Fixed gravity = Fixed::from_double(0.095);          // gravity
   Fixed max_fall = Fixed::from_double(1.5);           // max fall speed
   Fixed fast_fall = Fixed::from_double(2.4);          // fast-fall speed
+
+  // Body: an axis-aligned box standing on its feet, `height` tall and
+  // 2 * body_half_width wide, centred on the position (y up).
+  Fixed body_half_width = Fixed::from_double(4.0);
+  Fixed body_height = Fixed::from_double(12.0);
+  std::int32_t drop_through_frames = 10;  // frames pass-through platforms are ignored after a drop
 };
 
 // Abstract intents for one frame. A game maps its controls to these.
 struct Intent {
   Fixed move_x{};         // -1..1; positive is +x. Out-of-range values are clamped.
   bool jump = false;      // jump button held; a press is the frame it becomes true
-  bool fast_fall = false; // fast-fall (down) held
+  bool fast_fall = false; // down held: fast-fall in the air; a fresh press drops through a
+                          // pass-through platform you stand on
 };
 
 enum class Mode : std::uint8_t { Idle, Walk, Dash, Run, Skid, Turnaround, JumpSquat, Airborne };
@@ -85,14 +92,32 @@ struct EntityState {
   std::int8_t jumps_used = 0;  // aerial jumps used since leaving the ground
   std::uint8_t prev_jump = 0;  // jump button last frame (0/1)
   std::uint8_t fast_falling = 0;  // 0/1
+  std::uint8_t prev_down = 0;     // fast_fall intent last frame (0/1)
+  std::uint8_t eliminated = 0;    // 0/1: left the blast zone; frozen until the game replaces it
+  std::int16_t support = -1;      // index of the platform stood on, or -1
+  std::int16_t drop_timer = 0;    // frames left ignoring pass-through platforms
 };
 
-// The ground the entity stands on (flat, for now). It lands on it from the air.
+// Motion only: apply the intent to the movement state machine and integrate
+// position. No ground or platform is consulted; a grounded entity keeps its y.
+// The caller resolves contacts afterwards (flat `step` below, or `fp::step`
+// on a World in world.hpp).
+void advance(EntityState& e, const Intent& in, const MovementParams& p) noexcept;
+
+// Put an airborne entity in the landed state (Idle, aerial jumps refilled,
+// vertical speed zero, horizontal speed kept).
+void land(EntityState& e) noexcept;
+// Put a grounded entity in the air without a jump (walking off an edge, a
+// vanished platform): it keeps its aerial jumps and horizontal speed.
+void start_fall(EntityState& e) noexcept;
+
+// The ground the entity stands on (flat, infinite). The simplest world; also
+// the reference the movement tests use.
 struct Ground {
   Fixed y{};
 };
 
-// Advance one entity by one frame.
+// Advance one entity by one frame on flat ground.
 void step(EntityState& e, const Intent& in, const MovementParams& p, const Ground& g) noexcept;
 
 }  // namespace fp

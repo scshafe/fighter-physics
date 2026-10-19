@@ -58,7 +58,7 @@ starting point:
 | Air | acceleration (base and additional), max horizontal speed, air friction |
 | Vertical | gravity, max fall speed, fast-fall speed, terminal-velocity rules |
 | Jumps | jump-squat frames, full-hop and short-hop velocities, aerial jump count and velocity |
-| Body | collision shape (box/capsule), weight (for vertical contact) |
+| Body | box (half width, height; feet at the position), pass-through drop frames. Weight is deferred until a contact rule needs it |
 
 Every field is a fixed-point value in units per frame or per frame squared,
 documented with its Smash analogue.
@@ -118,6 +118,38 @@ tracked in the entity state so rollback needs nothing else) and `fast_fall`.
   the entity is placed on the ground, `vel.y` zeroed, the aerial jumps are
   refilled, and the mode is Idle; horizontal speed is kept. (Landing lag
   belongs with the game's move system.)
+
+## Platforms and contacts (implemented: `include/fp/world.hpp`)
+
+`Config` is what a game sets up once (a `Stage` of platforms and a blast-zone
+rectangle, plus one `MovementParams` per entity); `World` is all the
+simulation state (the entities and a frame counter) and is plain data.
+`fp::step(cfg, world, intents, events)` runs a frame; `events` is replaced
+each frame, in a deterministic order (entity id).
+
+Per entity, in id order: a fresh down press on a pass-through platform drops
+through it; `advance` (motion, the state machine of the previous sections);
+then contacts against the stage, which is static during contact resolution:
+
+- **Walls.** Solid platforms stop horizontal motion when the body's side
+  crosses their side while level with them; `vel.x` is zeroed.
+- **Landing.** An airborne entity lands on the highest platform top its feet
+  crossed this frame (and whose x-range the body overlaps); pass-through
+  platforms are ignored for `drop_through_frames` after a drop. Landing sets
+  the entity Idle, refills aerial jumps and records `support`.
+- **Head bump.** Rising into a solid's underside stops the head there and
+  zeroes `vel.y`. Pass-through platforms are open from below.
+- **Depenetration.** If the body is still inside a solid (placed there, or a
+  platform moved or respawned onto it) it is pushed out the shallowest way
+  (up preferred on ties).
+- **Support.** A grounded entity must still overlap its support's x-range at
+  its top; otherwise it falls (`Fell`), keeping horizontal speed and aerial
+  jumps. A fresh down press while standing on a pass-through platform drops
+  through it.
+- **Elimination.** Leaving the blast rectangle sets `eliminated` and emits
+  `Eliminated`; eliminated entities are frozen until the game replaces them.
+
+Events so far: `Landed`, `Fell`, `Eliminated`.
 
 ## Tests
 
