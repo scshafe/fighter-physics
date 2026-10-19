@@ -198,6 +198,15 @@ whole pipeline. After an intended behaviour change, regenerate the traces
 with `FP_UPDATE_GOLDEN=1 ./build/fighter_physics_golden_test` and review the
 diff.
 
+## State hash (implemented: `include/fp/state.hpp`)
+
+`fp::hash(const World&)` is a 64-bit hash of every state field in a fixed
+order, as little-endian integers (FNV-1a with a final mix), identical on every
+platform. The fields are listed once, in `src/archive.hpp`, and visited by
+"archives"; the hash is one, and snapshot/restore are others, so they cannot
+disagree about what the state is. Tests flip every field and require the hash
+to change, and pin a value that CI checks on Linux and macOS.
+
 ## Rollback support
 
 All simulation state lives in plain, trivially copyable arrays. `snapshot()`
