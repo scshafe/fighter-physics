@@ -31,7 +31,7 @@ void enter(EntityState& e, Mode m) noexcept {
 
 }  // namespace
 
-void step(EntityState& e, const Intent& in, const MovementParams& p, const Ground& g) noexcept {
+void advance(EntityState& e, const Intent& in, const MovementParams& p) noexcept {
   const Fixed x = clamp(in.move_x, -Fixed::one(), Fixed::one());
   const Fixed ax = abs(x);
   const int dir = ax > p.deadzone ? sign(x) : 0;
@@ -48,6 +48,7 @@ void step(EntityState& e, const Intent& in, const MovementParams& p, const Groun
   e.prev_dir = static_cast<std::int8_t>(dir);
   const bool jump_pressed = in.jump && e.prev_jump == 0;
   e.prev_jump = in.jump ? 1 : 0;
+  e.prev_down = in.fast_fall ? 1 : 0;
   const bool flicked = dir != 0 && ax >= p.dash_threshold && e.flick_age <= p.flick_frames;
 
   auto start_dash = [&] {
@@ -189,14 +190,28 @@ void step(EntityState& e, const Intent& in, const MovementParams& p, const Groun
   }
 
   e.pos.x += e.vel.x;
+  if (e.mode == Mode::Airborne) e.pos.y += e.vel.y;
+}
+
+void land(EntityState& e) noexcept {
+  e.vel.y = Fixed::zero();
+  enter(e, Mode::Idle);
+  e.jumps_used = 0;
+  e.fast_falling = 0;
+}
+
+void start_fall(EntityState& e) noexcept {
+  e.vel.y = Fixed::zero();
+  enter(e, Mode::Airborne);
+  e.fast_falling = 0;
+}
+
+void step(EntityState& e, const Intent& in, const MovementParams& p, const Ground& g) noexcept {
+  advance(e, in, p);
   if (e.mode == Mode::Airborne) {
-    e.pos.y += e.vel.y;
-    if (e.vel.y <= Fixed::zero() && e.pos.y <= g.y) {  // landed
+    if (e.vel.y <= Fixed::zero() && e.pos.y <= g.y) {
       e.pos.y = g.y;
-      e.vel.y = Fixed::zero();
-      enter(e, Mode::Idle);
-      e.jumps_used = 0;
-      e.fast_falling = 0;
+      land(e);
     }
   } else {
     e.pos.y = g.y;
