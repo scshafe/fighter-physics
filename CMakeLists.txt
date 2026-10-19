@@ -34,6 +34,7 @@ if(BUILD_TESTING)
   fp_add_test(ground_movement)
   fp_add_test(air_movement)
   fp_add_test(world)
+  fp_add_test(platform)
   fp_add_test(golden)
   target_compile_definitions(fighter_physics_golden_test PRIVATE
     FP_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden")
