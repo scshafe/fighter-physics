@@ -8,9 +8,7 @@
 #include <vector>
 
 #include "check.hpp"
-#include "fp/jobs.hpp"
-#include "fp/state.hpp"
-#include "fp/world.hpp"
+#include "scenario.hpp"
 
 using namespace fp;
 
@@ -19,51 +17,7 @@ namespace {
 constexpr int kEntities = 48;
 constexpr int kFrames = 1500;
 
-Fixed F(double v) { return Fixed::from_double(v); }
-
-Config make_config() {
-  Config c;
-  auto solid = [](double l, double r, double b, double t) {
-    PlatformDef d;
-    d.rect = {F(l), F(r), F(b), F(t)};
-    return d;
-  };
-  PlatformDef floor = solid(-60, 60, -10, 0);
-  PlatformDef shelf = solid(-30, 30, 20, 21);
-  shelf.kind = PlatformKind::PassThrough;
-  PlatformDef crumble = solid(-90, -62, 10, 12);
-  crumble.shake_frames = 25;
-  crumble.respawn_frames = 40;
-  PlatformDef mover = solid(62, 90, 10, 12);
-  mover.travel = Vec2::from_double(0, 30);
-  mover.move_period = 120;
-  PlatformDef wall = solid(100, 104, 0, 40);
-  PlatformDef far_floor = solid(94, 140, -10, 0);
-  c.stage.platforms = {floor, shelf, crumble, mover, wall, far_floor};
-  c.stage.blast = {F(-140), F(150), F(-40), F(120)};
-  c.params.assign(kEntities, MovementParams{});
-  for (int i = 0; i < kEntities; ++i) {  // a few different archetypes
-    MovementParams& p = c.params[i];
-    if (i % 3 == 1) {
-      p.run_max = F(2.2);
-      p.full_hop_vel = F(3.0);
-      p.body_half_width = F(3.0);
-    } else if (i % 3 == 2) {
-      p.gravity = F(0.12);
-      p.aerial_jumps = 2;
-    }
-  }
-  return c;
-}
-
-EntityState spawn(const Config& cfg, int id) {
-  // Spread over the platforms, several at the same x so they stack on landing.
-  EntityState e;
-  e.mode = Mode::Airborne;
-  e.pos = Vec2::from_double(-50.0 + 10.0 * (id % 8) + (id % 5 == 0 ? 0.5 : 0.0), 30.0 + 7.0 * (id / 8));
-  (void)cfg;
-  return e;
-}
+using scenario::F;
 
 struct Totals {
   std::map<EventType, int> events;
@@ -77,35 +31,23 @@ std::uint64_t mix(std::uint64_t h, std::uint64_t v) {
 
 // Returns the per-frame (state hash, event hash) trace.
 std::vector<std::pair<std::uint64_t, std::uint64_t>> run(JobSystem* jobs, Totals* totals) {
-  const Config cfg = make_config();
-  World w = make_world(cfg);
-  for (int i = 0; i < kEntities; ++i) w.entities.push_back(spawn(cfg, i));
-  fp_test::Rng rng(0xf16417e5ULL);
-  std::vector<Intent> in(kEntities);
+  scenario::Scenario sc(kEntities);
   std::vector<std::pair<std::uint64_t, std::uint64_t>> trace;
-  Events ev;
   for (int f = 0; f < kFrames; ++f) {
-    for (int i = 0; i < kEntities; ++i) {
-      const std::uint64_t r = rng.next();
-      Intent& x = in[i];
-      if ((r & 7) == 0) x.move_x = F(static_cast<int>((r >> 8) % 5) * 0.5 - 1.0);  // sticky: changes now and then
-      if (((r >> 16) & 7) == 0) x.jump = !x.jump;
-      x.fast_fall = ((r >> 24) & 15) == 0;
-    }
-    ev.clear();
-    step(cfg, w, in, ev, jobs);
+    // The hash is taken before the game respawns anyone, so it sees the step's own result.
+    sc.ev.clear();
+    step(sc.cfg, sc.w, sc.next_intents(), sc.ev, jobs);
     std::uint64_t eh = 0;
-    for (const Event& e : ev) {
+    for (const Event& e : sc.ev) {
       eh = mix(eh, (static_cast<std::uint64_t>(e.type) << 40) ^ (static_cast<std::uint64_t>(e.id) << 20) ^
                        static_cast<std::uint64_t>(e.other + 1));
       if (totals) ++totals->events[e.type];
     }
-    trace.emplace_back(hash(w), eh);
-    // The "game": eliminated entities come back at the top.
-    for (int i = 0; i < kEntities; ++i) {
-      if (w.entities[i].eliminated != 0) {
-        w.entities[i] = spawn(cfg, i);
-        w.entities[i].pos.y = F(60);
+    trace.emplace_back(hash(sc.w), eh);
+    for (int i = 0; i < kEntities; ++i) {  // the "game": eliminated entities come back at the top
+      if (sc.w.entities[i].eliminated != 0) {
+        sc.w.entities[i] = scenario::spawn(i);
+        sc.w.entities[i].pos.y = F(60);
         if (totals) ++totals->respawns;
       }
     }

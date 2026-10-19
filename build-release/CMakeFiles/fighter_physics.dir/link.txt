@@ -1,0 +1,2 @@
+/usr/bin/ar qc libfighter_physics.a CMakeFiles/fighter_physics.dir/src/version.cpp.o CMakeFiles/fighter_physics.dir/src/movement.cpp.o CMakeFiles/fighter_physics.dir/src/world.cpp.o CMakeFiles/fighter_physics.dir/src/state.cpp.o CMakeFiles/fighter_physics.dir/src/jobs.cpp.o
+/usr/bin/ranlib libfighter_physics.a

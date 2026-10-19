@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/agent-fighter-physics/src/fighter-physics/build-release/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
