@@ -198,6 +198,18 @@ whole pipeline. After an intended behaviour change, regenerate the traces
 with `FP_UPDATE_GOLDEN=1 ./build/fighter_physics_golden_test` and review the
 diff.
 
+## Job system (implemented: `include/fp/jobs.hpp`)
+
+`fp::JobSystem(workers)` runs `parallel_for(count, fn)` on a fixed number of
+threads (the caller is worker 0; 1 means no threads). The partition is
+static: worker `w` always takes indices `[count*w/W, count*(w+1)/W)`, and
+a job writes only data owned by its index, so which thread ran what, and how
+many threads there were, cannot change a result. It uses the standard
+library only (`std::thread`, mutex, condition variable). It is the only
+parallel primitive the step needs: per-entity phases are `parallel_for` over
+entities, and anything that crosses entities is reduced afterwards in id
+order.
+
 ## State hash (implemented: `include/fp/state.hpp`)
 
 `fp::hash(const World&)` is a 64-bit hash of every state field in a fixed
