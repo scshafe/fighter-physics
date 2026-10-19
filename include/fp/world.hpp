@@ -80,7 +80,9 @@ struct Config {
 // `Landed.other` and `EntityState::support` name a wall by
 // `stage.platforms.size() + slot`.
 enum class PlaceableKind : std::uint8_t {
-  Wall,  // a solid block: stood on, walked into, bumped from below, like a Solid platform
+  Wall,    // a solid block: stood on, walked into, bumped from below, like a Solid platform
+  Slick,   // a patch of ground: friction scaled by `traction_scale` (ice: below 1)
+  Sticky,  // a patch of ground: friction scaled up and ground speed caps by `speed_scale` (mud: above 1, below 1)
 };
 
 constexpr int kMaxPlaceables = 64;
@@ -90,6 +92,14 @@ struct Placeable {
   std::uint8_t active = 0;  // 0: the slot is free (and the rest of it is zero)
   Rect rect{};
   std::int32_t life = 0;  // frames left; 0 while active: permanent
+
+  // Patches (Slick, Sticky). An entity standing on the ground with its feet in `rect`
+  // (left <= x <= right, bottom <= y <= top) moves with `traction` and `skid_traction`
+  // times `traction_scale` and `walk_max`, `dash_max` and `run_max` times `speed_scale`.
+  // Both are >= 0; overlapping patches multiply, in slot order. Slick and Sticky act
+  // the same way and differ only in the label the game sees (and its typical values).
+  Fixed traction_scale = Fixed::one();
+  Fixed speed_scale = Fixed::one();
 };
 
 enum class EventType : std::uint8_t {
@@ -145,7 +155,7 @@ EntityState spawn_on(const Config& cfg, int platform, Fixed x);
 
 // Put a placeable on the stage in the lowest free slot (a new one if none is
 // free); returns the slot, or -1 if all kMaxPlaceables slots are taken or the
-// rect is empty or inverted. `p.life` > 0 makes it expire after that many
+// rect is empty or inverted, or a scale is negative. `p.life` > 0 makes it expire after that many
 // frames. An entity it lands on is pushed out the shallowest way on the next step.
 int place(World& w, Placeable p);
 

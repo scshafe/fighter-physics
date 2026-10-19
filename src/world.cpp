@@ -41,6 +41,28 @@ bool in_play(PlatformPhase ph) noexcept {
 
 bool has_stress(const PlatformDef& d) noexcept { return d.stress.shake_at > Fixed::zero(); }
 
+// The movement parameters an entity on the ground has this frame: the stage's patches under
+// its feet scale friction and the speed caps. Returns `p` itself when none applies.
+const MovementParams& patched(const std::vector<Placeable>& placeables, const EntityState& e,
+                              const MovementParams& p, MovementParams& scratch) noexcept {
+  if (!grounded_mode(e.mode)) return p;
+  const MovementParams* out = &p;
+  for (const Placeable& q : placeables) {
+    if (q.active == 0 || (q.kind != PlaceableKind::Slick && q.kind != PlaceableKind::Sticky)) continue;
+    if (e.pos.x < q.rect.left || e.pos.x > q.rect.right || e.pos.y < q.rect.bottom || e.pos.y > q.rect.top) continue;
+    if (out == &p) {
+      scratch = p;
+      out = &scratch;
+    }
+    scratch.traction *= q.traction_scale;
+    scratch.skid_traction *= q.traction_scale;
+    scratch.walk_max *= q.speed_scale;
+    scratch.dash_max *= q.speed_scale;
+    scratch.run_max *= q.speed_scale;
+  }
+  return *out;
+}
+
 // Resolve one entity's contacts with the platforms after `advance` moved it
 // from `prev`. Platforms are static during contact resolution (they move at
 // the end of the frame), so every entity's result depends only on its own
@@ -464,7 +486,7 @@ EntityState spawn_on(const Config& cfg, int platform, Fixed x) {
 }
 
 int place(World& w, Placeable p) {
-  if (!(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top) || p.life < 0) return -1;
+  if (!(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top) || p.life < 0 || p.traction_scale < Fixed::zero() || p.speed_scale < Fixed::zero()) return -1;
   p.active = 1;
   for (int k = 0; k < static_cast<int>(w.placeables.size()); ++k) {
     if (w.placeables[k].active == 0) {
@@ -527,7 +549,8 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
     }
 
     const Vec2 prev = e.pos;
-    advance(e, in, p);
+    MovementParams scratch;
+    advance(e, in, patched(w.placeables, e, p, scratch));
     if (e.mode == Mode::Airborne) {  // jumped off
       e.support = -1;
       e.support_entity = -1;

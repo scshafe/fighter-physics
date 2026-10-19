@@ -63,6 +63,8 @@ void io_placeable(A& a, P& p) {
   a.num(p.active);
   io_rect(a, p.rect);
   a.num(p.life);
+  a.fx(p.traction_scale);
+  a.fx(p.speed_scale);
 }
 
 template <class A, class W>
