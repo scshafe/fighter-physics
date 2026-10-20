@@ -103,6 +103,42 @@ void test_straddle() {
   CHECK(s.w.platforms[0].stress == F(0) && s.w.platforms[1].stress == F(0.125));
 }
 
+// straddle_share 0.75: each platform of a straddle gets 0.75 of the 0.125 rate (0.09375), the
+// pair 1.5x together; with three platforms each still gets 0.75; a rider on the straddler
+// sends its share (0.5) of that rate, so each gets 0.75 * (0.125 + 0.0625).
+void test_straddle_share() {
+  PlatformDef a = crumbler(-100, 0), b = crumbler(0, 100);
+  a.stress.straddle_share = b.stress.straddle_share = F(0.75);
+  Config c = config({a, b});
+  Runner r(c, spawn_on(c, 0, F(0)));
+  r.step();
+  CHECK(r.w.platforms[0].stress == F(0.09375) && r.w.platforms[1].stress == F(0.09375));
+  Runner s(c, spawn_on(c, 1, F(50)));  // fully on one: the share does not apply
+  s.step();
+  CHECK(s.w.platforms[0].stress == F(0) && s.w.platforms[1].stress == F(0.125));
+
+  PlatformDef m = crumbler(-0.5, 0.5);
+  m.stress.straddle_share = F(0.75);
+  PlatformDef l = crumbler(-100, -0.5), h = crumbler(0.5, 100);
+  l.stress.straddle_share = h.stress.straddle_share = F(0.75);
+  Config c3 = config({m, l, h});
+  EntityState e = spawn_on(c3, 0, F(0));
+  Runner t(c3, e);
+  t.step();
+  int n = 0;
+  for (const PlatformState& p : t.w.platforms) n += p.stress == F(0.09375);
+  CHECK(n == 3);
+
+  Config cr = config({a, b}, 2);
+  Runner u(cr, spawn_on(cr, 0, F(0)));
+  EntityState up;
+  up.pos = {F(0), F(4)};
+  up.support_entity = 0;
+  u.w.entities.push_back(up);
+  u.step();
+  CHECK(u.w.platforms[0].stress == F(0.140625) && u.w.platforms[1].stress == F(0.140625));
+}
+
 // An entity standing on another's head: the platform gets 0.125 from the one on it and a
 // share (0.5) of 0.125 from the one above it, and 0.25 share^2 of the third.
 void test_rider_share() {
@@ -151,6 +187,7 @@ int main() {
   test_decay();
   test_straddle();
   test_rider_share();
+  test_straddle_share();
   test_add_stress();
   return fp_test::finish();
 }

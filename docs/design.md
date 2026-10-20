@@ -221,7 +221,12 @@ them, so an entity's contacts never depend on the order of other entities.
   rate down to the platform under the bottom of the stack, times
   `rider_share` once per head between them. An entity whose feet are on
   several platforms (same top as its y, body overlapping) splits its rate
-  equally between them. With nobody on it the stress falls by `decay`.
+  equally between them (1/N each), unless the supporting platform sets
+  `straddle_share` > 0: then every platform of the straddle gets that fraction
+  of the rate, whatever N is (two or three or more; the pair carries 2x the
+  share together), so 0.75 loads each of two tiles at 0.75. `rider_share`
+  applies first, per head, as before. 0 (the default) keeps 1/N, so existing
+  hashes are unchanged; the setting is config, not state. With nobody on it the stress falls by `decay`.
   Phases follow the level: Solid below `shake_at` (`PlatformShaking` on
   entering Shaking; back to Solid if it decays), Shaking from `shake_at`,
   Doomed from `doom_at` (`PlatformDoomed`; sticky, no decay, and the stress

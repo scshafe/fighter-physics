@@ -371,7 +371,8 @@ void settle_stress(const PlatformDef& d, PlatformState& s, int id, World& w, Eve
 // The stress each platform receives this frame, and whether anyone is on it.
 // An entity's rate depends on its speed; one on a stack of heads sends
 // rider_share per head of it down to the platform under the bottom of the
-// stack; an entity whose feet span several platforms splits it equally.
+// stack; an entity whose feet span several platforms splits it equally, or gives
+// each of them straddle_share of it (the support platform's setting, any count).
 struct Load {
   std::vector<Fixed> stress;
   std::vector<char> occupied;
@@ -404,7 +405,9 @@ Load platform_loads(const Config& cfg, const World& w) {
     const EntityState& e = w.entities[a];
     Fixed rate = abs(e.vel.x) < st.still_speed ? st.still_rate : st.moving_rate;
     for (int h = 0; h < depth; ++h) rate = rate * st.rider_share;
-    const Fixed part = rate / Fixed::from_int(static_cast<std::int32_t>(feet.size()));
+    const Fixed part = feet.size() > 1 && st.straddle_share > Fixed::zero()
+                           ? rate * st.straddle_share
+                           : rate / Fixed::from_int(static_cast<std::int32_t>(feet.size()));
     for (int j : feet) {
       load.occupied[j] = 1;
       load.stress[j] += part;
