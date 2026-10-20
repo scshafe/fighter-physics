@@ -101,6 +101,7 @@ class Scenario {
       patch.speed_scale = ice ? F(1) : F(0.5);
       place(w, patch);
     }
+    w.platforms[0].belt = (w.frame / 120) % 2 == 0 ? F(0.03125) : F(-0.03125);  // the floor is a belt
     if (w.frame % 100 == 50) {
       Placeable pad;
       pad.kind = PlaceableKind::Spring;

@@ -147,6 +147,11 @@ struct PlatformState {
   std::int32_t clock = 0;  // position in the motion cycle
   Vec2 offset{};           // current displacement from the rest position
   Fixed stress{};          // 0..1, platforms with `PlatformDef::stress`
+  // Conveyor: units a frame, signed (+x), set by the game between steps (0: not a belt). Each
+  // frame, after its own motion, a grounded entity whose support is this platform, and the
+  // entities stacked on its head, is moved by `belt` along x (stopped by walls, and carried off
+  // an edge). The platform does not move. Ground friction is unchanged.
+  Fixed belt{};
 };
 
 struct World {

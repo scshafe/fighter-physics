@@ -47,6 +47,7 @@ void io_platform(A& a, P& p) {
   a.num(p.clock);
   io(a, p.offset);
   a.fx(p.stress);
+  a.fx(p.belt);
 }
 
 template <class A, class R>

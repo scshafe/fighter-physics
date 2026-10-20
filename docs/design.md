@@ -234,6 +234,14 @@ them, so an entity's contacts never depend on the order of other entities.
 - **Motion.** `move_period` (even) frames for a there-and-back trip of
   `travel` from the rest rectangle, linear. Riders (entities supported by the
   platform) are moved by the platform's displacement.
+- **Belt.** `PlatformState::belt` (units a frame, signed; 0 = not a belt) is
+  set by the game between steps and is in the snapshot and the hash. Each
+  frame, after its own motion and before contacts, an entity in a grounded
+  mode whose support is the platform, or who stands on a stack of heads whose
+  bottom does, moves by `belt` along x (the support is read from the start of
+  the frame, so entity order never matters). Walls stop it, an edge drops it,
+  friction is unchanged, so standing still means being carried and walking
+  against it is slower. The platform itself does not move.
 - **Destroy.** `destroy_platform` removes it permanently (riders fall).
 
 ### Placeables

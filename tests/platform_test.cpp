@@ -154,9 +154,67 @@ void test_platform_pushes_entity() {
   CHECK(r.e().pos.x == F(-5) && r.e().mode == Idle);
 }
 
+// Conveyor: `belt` moves a grounded entity (and what stands on its head) each frame after its
+// own motion; the platform stays. The game changes it between steps.
+void test_belt() {
+  Config c = config({solid(-100, 100, -10, 0)}, 2);
+  {
+    Runner r(c, spawn_on(c, 0, F(0)));
+    r.w.platforms[0].belt = F(0.5);
+    r.step();
+    r.step();
+    r.step();
+    CHECK(r.e().pos.x == F(1.5) && r.e().vel.x == F(0) && r.e().mode == Idle && r.e().support == 0);
+    CHECK(r.w.platforms[0].offset.x == F(0));
+    r.w.platforms[0].belt = F(-0.25);  // reversed
+    r.step();
+    CHECK(r.e().pos.x == F(1.25));
+  }
+  {  // Friction is unchanged: sliding left at 1 loses 0.0625 and the belt adds 0.5 a frame.
+    EntityState e = spawn_on(c, 0, F(0));
+    e.vel.x = F(-1);
+    Runner with(c, e), without(c, e);
+    with.w.platforms[0].belt = F(0.5);
+    with.step();
+    without.step();
+    CHECK(without.e().pos.x == F(-0.9375) && with.e().pos.x == F(-0.4375) && with.e().vel.x == without.e().vel.x);
+  }
+  {  // Carried off the edge: x = 100.5 is still over it (body 99.5..101.5), 101.5 is not.
+    Runner r(c, spawn_on(c, 0, F(99.5)));
+    r.w.platforms[0].belt = F(1);
+    r.step();
+    CHECK(r.e().mode == Idle && r.e().pos.x == F(100.5));
+    r.step();
+    CHECK(r.e().mode == Airb && r.has(EventType::Fell) && r.e().pos.x == F(101.5));
+  }
+  {  // A wall stops it (its right edge reaches 10 - body half width 1 = 9).
+    Runner r(c, spawn_on(c, 0, F(7)));
+    place(r.w, Placeable{PlaceableKind::Wall, 1, {F(10), F(12), F(0), F(8)}, 0, F(1), F(1), {}});
+    r.w.platforms[0].belt = F(1);
+    for (int i = 0; i < 5; ++i) r.step();
+    CHECK(r.e().pos.x == F(9) && r.e().mode == Idle);
+  }
+  {  // Not in the air; and an entity standing on another's head rides the belt under the stack.
+    Runner a(c, air(0, 5, 0, 0));
+    a.w.platforms[0].belt = F(0.5);
+    a.step();
+    CHECK(a.e().pos.x == F(0));
+    Runner r(c, spawn_on(c, 0, F(0)));
+    EntityState up;
+    up.pos = {F(0), F(4)};
+    up.support_entity = 0;
+    r.w.entities.push_back(up);
+    r.w.platforms[0].belt = F(0.5);
+    r.step();
+    r.step();
+    CHECK(r.w.entities[0].pos.x == F(1) && r.w.entities[1].pos.x == F(1) && r.w.entities[1].support_entity == 0);
+  }
+}
+
 }  // namespace
 
 int main() {
+  test_belt();
   test_crumble_and_respawn();
   test_crumble_conditions();
   test_destroy();
