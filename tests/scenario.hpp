@@ -102,6 +102,18 @@ class Scenario {
       place(w, patch);
     }
     w.platforms[0].belt = (w.frame / 120) % 2 == 0 ? F(0.03125) : F(-0.03125);  // the floor is a belt
+    if (w.frame % 40 == 7) {  // glue or thorns on every seventh entity
+      for (std::size_t i = 0; i < w.entities.size(); i += 7) {
+        Modifier m;
+        const bool glue = (w.frame / 40) % 2 == 0;
+        m.ground_speed = glue ? F(0.1) : F(0.4);
+        m.ground_accel = glue ? F(1) : F(0.5);
+        m.air_accel = F(0.5);
+        m.jump = glue ? F(0.55) : F(0.8);
+        m.frames = 25;
+        w.entities[i].mod = m;
+      }
+    }
     if (w.frame % 100 == 50) {
       Placeable pad;
       pad.kind = PlaceableKind::Spring;

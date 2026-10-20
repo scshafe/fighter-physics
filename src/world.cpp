@@ -45,12 +45,16 @@ bool feet_in(const Rect& r, Vec2 feet) noexcept {
   return feet.x >= r.left && feet.x <= r.right && feet.y >= r.bottom && feet.y <= r.top;
 }
 
-// The movement parameters an entity on the ground has this frame: the stage's patches under
-// its feet scale friction and the speed caps. Returns `p` itself when none applies.
+// The movement parameters an entity has this frame: its modifier, then (on the ground) the
+// patches under its feet scaling friction and the speed caps. Returns `p` itself when none applies.
 const MovementParams& patched(const std::vector<Placeable>& placeables, const EntityState& e,
                               const MovementParams& p, MovementParams& scratch) noexcept {
-  if (!grounded_mode(e.mode)) return p;
   const MovementParams* out = &p;
+  if (e.mod.frames > 0) {
+    scratch = scaled(p, e.mod);
+    out = &scratch;
+  }
+  if (!grounded_mode(e.mode)) return *out;
   for (const Placeable& q : placeables) {
     if (q.active == 0 || (q.kind != PlaceableKind::Slick && q.kind != PlaceableKind::Sticky)) continue;
     if (!feet_in(q.rect, e.pos)) continue;
@@ -569,6 +573,7 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
     const Vec2 prev = e.pos;
     MovementParams scratch;
     advance(e, in, patched(w.placeables, e, p, scratch));
+    if (e.mod.frames > 0 && --e.mod.frames == 0) e.mod = Modifier{};
     if (e.mode == Mode::Airborne) {  // jumped off
       e.support = -1;
       e.support_entity = -1;

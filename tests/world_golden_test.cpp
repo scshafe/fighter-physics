@@ -164,5 +164,28 @@ int main() {
                    in.move_x = (f >= 15 && f < 30) ? F(-1) : F(0);
                  }));
   }
+  // Run, get glued for 30 frames (ground speed x0.1, jump x0.55) and thorned (ground accel x0.5,
+  // jump x0.8) after it, hop at frame 70.
+  {
+    Config c = floor_stage();
+    check_golden("glue_then_thorns_run", trace(c, spawn_on(c, 0, F(0)), 110, [](int f, World& w, Intent& in) {
+                   Modifier& m = w.entities[0].mod;
+                   if (f == 20) {
+                     m = Modifier{};
+                     m.ground_speed = F(0.1);
+                     m.jump = F(0.55);
+                     m.frames = 30;
+                   }
+                   if (f == 50) {
+                     m = Modifier{};
+                     m.ground_speed = F(0.4);
+                     m.ground_accel = F(0.5);
+                     m.jump = F(0.8);
+                     m.frames = 40;
+                   }
+                   in.move_x = F(1);
+                   in.jump = f >= 70 && f < 80;
+                 }));
+  }
   return fp_test::finish();
 }

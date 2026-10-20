@@ -38,6 +38,12 @@ void io_entity(A& a, E& e) {
   a.num(e.support);
   a.num(e.support_entity);
   a.num(e.drop_timer);
+  a.fx(e.mod.ground_speed);
+  a.fx(e.mod.ground_accel);
+  a.fx(e.mod.air_speed);
+  a.fx(e.mod.air_accel);
+  a.fx(e.mod.jump);
+  a.num(e.mod.frames);
 }
 
 template <class A, class P>

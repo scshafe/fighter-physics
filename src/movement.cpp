@@ -200,6 +200,25 @@ void land(EntityState& e) noexcept {
   e.fast_falling = 0;
 }
 
+MovementParams scaled(const MovementParams& p, const Modifier& m) noexcept {
+  MovementParams q = p;
+  q.walk_init *= m.ground_speed;
+  q.walk_max *= m.ground_speed;
+  q.dash_init *= m.ground_speed;
+  q.dash_max *= m.ground_speed;
+  q.run_max *= m.ground_speed;
+  q.walk_accel *= m.ground_accel;
+  q.dash_accel *= m.ground_accel;
+  q.run_accel *= m.ground_accel;
+  q.air_max *= m.air_speed;
+  q.air_accel_base *= m.air_accel;
+  q.air_accel_add *= m.air_accel;
+  q.full_hop_vel *= m.jump;
+  q.short_hop_vel *= m.jump;
+  q.aerial_jump_vel *= m.jump;
+  return q;
+}
+
 void start_fall(EntityState& e) noexcept {
   e.vel.y = Fixed::zero();
   enter(e, Mode::Airborne);

@@ -244,6 +244,20 @@ them, so an entity's contacts never depend on the order of other entities.
   against it is slower. The platform itself does not move.
 - **Destroy.** `destroy_platform` removes it permanently (riders fall).
 
+### Movement modifiers
+
+`EntityState::mod` (a `Modifier`, in the snapshot and hash) scales an
+entity's `MovementParams` for a number of steps: `ground_speed` (walk_init,
+walk_max, dash_init, dash_max, run_max), `ground_accel` (walk, dash and run
+acceleration), `air_speed` (air_max), `air_accel` (air_accel_base and _add) and
+`jump` (full hop, short hop and aerial jump velocities), plus `frames` left.
+The step applies the scales while `frames > 0`, then counts it down; at 0 the
+whole modifier is reset, so `frames = k` lasts exactly k steps and a game that
+sets it every tick keeps it going. Scales are >= 0 (`restore` refuses
+negative ones). It applies before a Sticky patch, and the two multiply. Friction
+(`traction`), gravity and fall speeds are not scaled; ledgefall can add what
+it needs to the list. Eliminated entities are frozen, modifier included.
+
 ### Placeables
 
 Things the game puts on the stage during a match live in `World::placeables`:

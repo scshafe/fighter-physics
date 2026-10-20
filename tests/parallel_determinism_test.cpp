@@ -90,7 +90,7 @@ int main() {
 
   // Pinned: the same on Linux and macOS, gcc and clang, debug and release. If the simulation changes on
   // purpose, update it deliberately (the line below prints the new value).
-  CHECK(serial.back().first == 0x44f48bb68e57d1a6ULL);
+  CHECK(serial.back().first == 0x75ca313f8fed45beULL);
   std::printf("final hash %016llx; events: landed %d, fell %d, eliminated %d, on-entity %d, bumped %d, shaking %d, "
               "crumbled %d, respawned %d; entity respawns %d\n",
               static_cast<unsigned long long>(serial.back().first), totals.events[EventType::Landed],
