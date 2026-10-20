@@ -138,7 +138,7 @@ bool valid(const Config& cfg, const World& w) {
   const int np = static_cast<int>(w.platforms.size());
   const int ne = static_cast<int>(w.entities.size());
   for (const PlatformState& p : w.platforms) {
-    if (static_cast<std::uint8_t>(p.phase) > static_cast<std::uint8_t>(PlatformPhase::Destroyed)) return false;
+    if (static_cast<std::uint8_t>(p.phase) > static_cast<std::uint8_t>(PlatformPhase::Doomed)) return false;  // keep Doomed the last enumerator
     if (p.timer < 0 || p.clock < 0) return false;
   }
   if (w.placeables.size() > static_cast<std::size_t>(kMaxPlaceables)) return false;

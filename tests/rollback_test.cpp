@@ -110,6 +110,44 @@ void test_rolling_back_repeatedly() {
   CHECK(rollbacks >= 15);
 }
 
+// Every PlatformPhase survives a snapshot and restore; the first value past the last one is
+// refused. Add the next enumerator to `kPhases` (and keep Doomed or its successor last).
+void test_every_platform_phase() {
+  const PlatformPhase kPhases[] = {PlatformPhase::Solid, PlatformPhase::Shaking, PlatformPhase::Gone,
+                                   PlatformPhase::Destroyed, PlatformPhase::Doomed};
+  Scenario sc(4);
+  const std::uint8_t past = static_cast<std::uint8_t>(PlatformPhase::Doomed) + 1;
+  for (PlatformPhase ph : kPhases) {
+    for (PlatformState& p : sc.w.platforms) p.phase = ph;
+    std::vector<std::uint8_t> bytes;
+    snapshot(sc.w, bytes);
+    World back = make_world(sc.cfg);
+    back.entities = sc.w.entities;
+    CHECK(restore(sc.cfg, back, bytes));
+    CHECK(hash(back) == hash(sc.w));
+  }
+  for (PlatformState& p : sc.w.platforms) p.phase = static_cast<PlatformPhase>(past);
+  std::vector<std::uint8_t> bytes;
+  snapshot(sc.w, bytes);
+  World back = make_world(sc.cfg);
+  back.entities = sc.w.entities;
+  CHECK(!restore(sc.cfg, back, bytes));
+
+  // And the real thing: a stress platform stood on until it is Doomed.
+  Scenario st(1);
+  st.w.entities[0] = spawn_on(st.cfg, 5, scenario::F(117));
+  bool doomed = false;
+  for (int f = 0; f < 600 && !doomed; ++f) {
+    st.advance(std::vector<Intent>(1), nullptr);
+    doomed = st.w.platforms[5].phase == PlatformPhase::Doomed;
+  }
+  CHECK(doomed);
+  snapshot(st.w, bytes);
+  World r = make_world(st.cfg);
+  r.entities = st.w.entities;
+  CHECK(restore(st.cfg, r, bytes) && hash(r) == hash(st.w));
+}
+
 void test_malformed() {
   Scenario sc(6);
   for (int f = 0; f < 60; ++f) sc.advance(sc.next_intents(), nullptr);
@@ -167,6 +205,7 @@ int main() {
   test_round_trip_and_bytes();
   test_replay_matches();
   test_rolling_back_repeatedly();
+  test_every_platform_phase();
   test_malformed();
   return fp_test::finish();
 }
