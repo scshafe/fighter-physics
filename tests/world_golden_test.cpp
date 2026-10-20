@@ -155,5 +155,14 @@ int main() {
                    in.move_x = f <= 23 ? F(0.5) : F(0);
                  }));
   }
+  // Stand on a belt (+0.5), walk against it, then the game stops the belt (frame 40) and reverses
+  // it (frame 55).
+  {
+    Config c = floor_stage();
+    check_golden("belt_ride", trace(c, spawn_on(c, 0, F(0)), 80, [](int f, World& w, Intent& in) {
+                   w.platforms[0].belt = f < 40 ? F(0.5) : (f < 55 ? F(0) : F(-0.5));
+                   in.move_x = (f >= 15 && f < 30) ? F(-1) : F(0);
+                 }));
+  }
   return fp_test::finish();
 }

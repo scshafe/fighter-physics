@@ -537,6 +537,17 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
   std::vector<Vec2> prev_pos(n);
   std::vector<Events> local(n);
 
+  // The belts' push on each entity, from where everyone stood at the start of the frame
+  // (an entity on a stack of heads rides the belt under the bottom of the stack).
+  std::vector<Fixed> belt(n);
+  for (int id = 0; id < n; ++id) {
+    if (w.entities[id].eliminated != 0) continue;
+    int root = id;
+    for (int hops = 0; hops < n && w.entities[root].support_entity >= 0; ++hops) root = w.entities[root].support_entity;
+    const std::int16_t sup = w.entities[root].support;
+    if (sup >= 0 && sup < static_cast<int>(w.platforms.size())) belt[id] = w.platforms[sup].belt;
+  }
+
   // Each entity's own motion and platform contacts: independent, so parallel.
   for_each(jobs, n, [&](int id) {
     EntityState& e = w.entities[id];
@@ -562,6 +573,7 @@ void step(const Config& cfg, World& w, std::span<const Intent> intents, Events& 
       e.support = -1;
       e.support_entity = -1;
     }
+    if (belt[id] != Fixed::zero() && grounded_mode(e.mode)) e.pos.x += belt[id];
     resolve_platforms(views, e, p, prev, id, ev);
     if (e.drop_timer > 0) --e.drop_timer;
 

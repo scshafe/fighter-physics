@@ -128,7 +128,7 @@ class Reader {
   std::size_t pos_ = 0;
 };
 
-constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 5};  // format, then version
+constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 6};  // format, then version
 
 bool flag(std::uint8_t v) { return v <= 1; }
 
