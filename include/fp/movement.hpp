@@ -80,6 +80,24 @@ struct Intent {
 
 enum class Mode : std::uint8_t { Idle, Walk, Dash, Run, Skid, Turnaround, JumpSquat, Airborne };
 
+// A temporary scaling of an entity's movement (glue, thorns, a stomp's slow): scales on its
+// MovementParams for `frames` more steps. All scales are >= 0 and default to 1. `fp::step`
+// applies the scales on each step while `frames` > 0, then counts `frames` down, and resets the
+// whole modifier when it reaches 0, so `frames = k` lasts exactly k steps; a game that sets it
+// again every tick keeps it going. It is part of the entity's state (snapshot, hash). A
+// Sticky patch applies on top of it, and the two multiply.
+struct Modifier {
+  Fixed ground_speed = Fixed::one();  // walk_init, walk_max, dash_init, dash_max, run_max
+  Fixed ground_accel = Fixed::one();  // walk_accel, dash_accel, run_accel
+  Fixed air_speed = Fixed::one();     // air_max
+  Fixed air_accel = Fixed::one();     // air_accel_base, air_accel_add
+  Fixed jump = Fixed::one();          // full_hop_vel, short_hop_vel, aerial_jump_vel
+  std::int32_t frames = 0;            // steps left; 0: no effect
+};
+
+// `p` with the modifier's scales applied.
+MovementParams scaled(const MovementParams& p, const Modifier& m) noexcept;
+
 // All of an entity's simulation state: plain data, no pointers.
 struct EntityState {
   Vec2 pos{};
@@ -97,6 +115,7 @@ struct EntityState {
   std::int16_t support = -1;      // index of the platform stood on, or -1
   std::int16_t support_entity = -1;  // id of the entity stood on (its head), or -1
   std::int16_t drop_timer = 0;    // frames left ignoring pass-through platforms
+  Modifier mod{};
 };
 
 // Motion only: apply the intent to the movement state machine and integrate

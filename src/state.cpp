@@ -128,7 +128,7 @@ class Reader {
   std::size_t pos_ = 0;
 };
 
-constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 6};  // format, then version
+constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 7};  // format, then version
 
 bool flag(std::uint8_t v) { return v <= 1; }
 
@@ -158,6 +158,11 @@ bool valid(const Config& cfg, const World& w) {
     if (!flag(e.prev_jump) || !flag(e.fast_falling) || !flag(e.prev_down) || !flag(e.eliminated)) return false;
     if (e.support < -1 || e.support >= nslots || e.support_entity < -1 || e.support_entity >= ne) return false;
     if (e.frames < 0 || e.jumps_used < 0 || e.drop_timer < 0) return false;
+    const Modifier& m = e.mod;
+    if (m.frames < 0 || m.ground_speed < Fixed::zero() || m.ground_accel < Fixed::zero() ||
+        m.air_speed < Fixed::zero() || m.air_accel < Fixed::zero() || m.jump < Fixed::zero()) {
+      return false;
+    }
   }
   return true;
 }
