@@ -1,5 +1,6 @@
-// Placeables: walls, ground patches and springs. Hand-worked numbers, as in world_test.cpp. The floor is
+// Placeables: walls, ground patches, springs and one-way ledges. Hand-worked numbers, as in world_test.cpp. The floor is
 // [-100, 100] x [-10, 0], so a wall's platform id is 1 + its slot.
+#include "fp/state.hpp"
 #include "world_fixture.hpp"
 
 using namespace fp;
@@ -277,9 +278,94 @@ void test_spring_slots() {
   CHECK_EQ(place(w, spring(0, 4, 0, 1)), 0);
 }
 
+Placeable ledge(double l, double r, double top, int life = 0, int only_for = -1) {
+  Placeable p = wall(l, r, top - 1, top, life);
+  p.kind = PlaceableKind::OneWay;
+  p.only_for = only_for;
+  return p;
+}
+
+// A ledge at y=8 over [10, 20]: lands on it from above (platform 1), rises through it from
+// below without a bump, and drops through on a fresh down press.
+void test_one_way() {
+  Config c = stage();
+  {
+    Runner r(c, air(15, 12, 0, 0));
+    place(r.w, ledge(10, 20, 8));
+    for (int i = 0; i < 6; ++i) r.step();
+    CHECK(r.e().pos.y == F(8) && r.e().support == 1 && r.has(EventType::Landed, 1) == true);
+    // Drop through with a fresh down press: falls to the floor.
+    Intent down;
+    down.fast_fall = true;
+    r.step(down);
+    CHECK(r.e().mode == Mode::Airborne && r.has(EventType::Fell));
+    for (int i = 0; i < 40; ++i) r.step();
+    CHECK(r.e().mode == Mode::Idle && r.e().support == 0 && r.e().pos.y == F(0));
+  }
+  {  // Up through it, coming back down on it.
+    Runner r(c, air(15, 2, 0, 3));
+    place(r.w, ledge(10, 20, 8));
+    bool above = false, bumped = false;
+    for (int i = 0; i < 30; ++i) {
+      r.step();
+      above = above || r.e().pos.y > F(9);
+      bumped = bumped || r.has(EventType::BumpedEntity);
+      if (r.e().support == 1) break;
+    }
+    CHECK(above && !bumped && r.e().support == 1 && r.e().pos.y == F(8));
+  }
+  {  // Beside it (x outside the range) nothing.
+    Runner r(c, air(30, 12, 0, 0));
+    place(r.w, ledge(10, 20, 8));
+    for (int i = 0; i < 30; ++i) r.step();
+    CHECK(r.e().support == 0);
+  }
+  {  // Expires under a rider.
+    EntityState e = spawn_on(c, 0, F(15));
+    e.pos.y = F(8);
+    e.support = 1;
+    Runner r(c, e);
+    place(r.w, ledge(10, 20, 8, 2));
+    r.step();
+    CHECK(r.e().mode == Mode::Idle);
+    r.step();
+    CHECK(has_event(r.ev, EventType::PlaceableRemoved, 0) && r.has(EventType::Fell));
+  }
+}
+
+// only_for 1: entity 0 falls straight through, entity 1 lands on it.
+void test_only_for() {
+  Config c = config({solid(-100, 100, -10, 0)}, 2);
+  World w = make_world(c);
+  w.entities.push_back(air(15, 12, 0, 0));
+  w.entities.push_back(air(35, 12, 0, 0));
+  CHECK_EQ(place(w, ledge(10, 40, 8, 0, 1)), 0);
+  Events ev;
+  const std::vector<Intent> none(2);
+  for (int i = 0; i < 40; ++i) {
+    ev.clear();
+    step(c, w, none, ev);
+  }
+  CHECK(w.entities[0].support == 0 && w.entities[0].pos.y == F(0));
+  CHECK(w.entities[1].support == 1 && w.entities[1].pos.y == F(8));
+  CHECK_EQ(place(w, ledge(10, 40, 8, 0, -2)), -1);
+  // restore refuses a filter naming an entity that does not exist.
+  w.placeables[0].only_for = 2;
+  std::vector<std::uint8_t> bytes;
+  snapshot(w, bytes);
+  World back = make_world(c);
+  back.entities = w.entities;
+  CHECK(!restore(c, back, bytes));
+  w.placeables[0].only_for = 1;
+  snapshot(w, bytes);
+  CHECK(restore(c, back, bytes) && hash(back) == hash(w));
+}
+
 }  // namespace
 
 int main() {
+  test_one_way();
+  test_only_for();
   test_spring();
   test_spring_landing_and_order();
   test_spring_slots();

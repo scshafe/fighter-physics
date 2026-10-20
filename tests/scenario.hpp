@@ -114,6 +114,14 @@ class Scenario {
         w.entities[i].mod = m;
       }
     }
+    if (w.frame % 70 == 30) {  // a ledge for everyone, and one only entity 0 stands on
+      Placeable ledge;
+      ledge.kind = PlaceableKind::OneWay;
+      ledge.rect = {F(-20), F(20), F(11), F(12)};
+      ledge.life = 60;
+      ledge.only_for = (w.frame / 70) % 2 == 0 ? -1 : 0;
+      place(w, ledge);
+    }
     if (w.frame % 100 == 50) {
       Placeable pad;
       pad.kind = PlaceableKind::Spring;

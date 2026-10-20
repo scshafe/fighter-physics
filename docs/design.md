@@ -287,6 +287,13 @@ placeable slots. `EntityState::support` and `Landed.other` name a wall as
   below 1); the engine treats them alike. The patch is read from where the
   entity stood at the start of the frame, so patches never depend on the order
   of entities.
+- **OneWay.** A ledge: a `PassThrough` platform at the rect's top and
+  x-range, with `life` (a temporary ledge, a vine leaf). Entities rise through
+  it, land on it from above and can drop through it on a fresh down press;
+  riders fall when it goes (`PlaceableRemoved` + `Fell`). `only_for` = an
+  entity id makes it solid for that entity alone (a forged floor): every other
+  entity passes through it as if it were not there. `restore` refuses an
+  `only_for` that names no entity.
 - **Spring.** A pad: after an entity's own motion and platform contacts, if it
   is on the ground (any grounded mode) with its feet in the rect, it is put in
   the air with `vel.y = launch.y` and `vel.x += launch.x` and `Sprung` (id:
