@@ -33,6 +33,7 @@ struct PlatformStress {
   Fixed rider_share{};  // of a rider's rate that reaches the platform below a stack, per head
   Fixed doom_rate{};
   Fixed decay{};        // per frame while nothing stands on it
+  Fixed straddle_share{};  // of its rate each platform gets from an entity on several; 0 = 1/N
 };
 
 struct PlatformDef {
