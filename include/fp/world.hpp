@@ -84,6 +84,8 @@ enum class PlaceableKind : std::uint8_t {
   Slick,   // a patch of ground: friction scaled by `traction_scale` (ice: below 1)
   Sticky,  // a patch of ground: friction scaled up and ground speed caps by `speed_scale` (mud: above 1, below 1)
   Spring,  // a pad: launches an entity that is on the ground with its feet in the rect
+  OneWay,  // a ledge: stood on from above only, like a PassThrough platform (drop-through included),
+           // at the rect's top and x-range; optionally only for one entity
 };
 
 constexpr int kMaxPlaceables = 64;
@@ -108,6 +110,10 @@ struct Placeable {
   // Only the lowest-numbered spring under the feet acts. launch.y must be > 0 (so the
   // entity leaves the pad and does not spring again until it lands).
   Vec2 launch{};
+
+  // OneWay: -1 = everyone lands on it; an entity id = only that entity does, and every other entity
+  // passes through it as if it were not there. Must be < the number of entities (`restore` checks).
+  std::int32_t only_for = -1;
 };
 
 enum class EventType : std::uint8_t {
@@ -169,7 +175,7 @@ EntityState spawn_on(const Config& cfg, int platform, Fixed x);
 
 // Put a placeable on the stage in the lowest free slot (a new one if none is
 // free); returns the slot, or -1 if all kMaxPlaceables slots are taken or the
-// rect is empty or inverted, a scale is negative or a spring does not launch upward. `p.life` > 0 makes it expire after that many
+// rect is empty or inverted, only_for is below -1, a scale is negative or a spring does not launch upward. `p.life` > 0 makes it expire after that many
 // frames. An entity it lands on is pushed out the shallowest way on the next step.
 int place(World& w, Placeable p);
 

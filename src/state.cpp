@@ -13,7 +13,7 @@ bool is_free_slot(const Placeable& p) {
   return p.kind == z.kind && p.life == 0 && p.rect.left == z.rect.left && p.rect.right == z.rect.right &&
          p.rect.bottom == z.rect.bottom && p.rect.top == z.rect.top && p.traction_scale == z.traction_scale &&
          p.speed_scale == z.speed_scale && p.launch.x == z.launch.x &&
-         p.launch.y == z.launch.y;
+         p.launch.y == z.launch.y && p.only_for == z.only_for;
 }
 
 // FNV-1a over little-endian bytes, with a final mix.
@@ -128,7 +128,7 @@ class Reader {
   std::size_t pos_ = 0;
 };
 
-constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 7};  // format, then version
+constexpr std::uint8_t kMagic[4] = {'F', 'P', 'W', 8};  // format, then version
 
 bool flag(std::uint8_t v) { return v <= 1; }
 
@@ -143,11 +143,12 @@ bool valid(const Config& cfg, const World& w) {
   }
   if (w.placeables.size() > static_cast<std::size_t>(kMaxPlaceables)) return false;
   for (const Placeable& p : w.placeables) {
-    if (static_cast<std::uint8_t>(p.kind) > static_cast<std::uint8_t>(PlaceableKind::Spring)) return false;
+    if (static_cast<std::uint8_t>(p.kind) > static_cast<std::uint8_t>(PlaceableKind::OneWay)) return false;
     if (!flag(p.active) || p.life < 0) return false;
     if (p.active != 0 && !(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top)) return false;
     if (p.traction_scale < Fixed::zero() || p.speed_scale < Fixed::zero()) return false;
     if (p.active != 0 && p.kind == PlaceableKind::Spring && p.launch.y <= Fixed::zero()) return false;
+    if (p.only_for < -1 || p.only_for >= static_cast<std::int32_t>(w.entities.size())) return false;
     if (p.active == 0 && !is_free_slot(p)) return false;
   }
   const int nslots = np + static_cast<int>(w.placeables.size());

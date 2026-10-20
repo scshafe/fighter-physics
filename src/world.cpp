@@ -27,6 +27,7 @@ struct View {
   Rect rect;
   PlatformKind kind;
   bool active;
+  int only_for;  // -1: every entity; else the one entity that can land on it
 };
 
 bool overlaps_x(const EntityState& e, const MovementParams& p, const Rect& r) noexcept {
@@ -105,6 +106,7 @@ void resolve_platforms(const std::vector<View>& views, EntityState& e, const Mov
         const View& v = views[i];
         if (!v.active) continue;
         if (v.kind == PlatformKind::PassThrough && e.drop_timer > 0) continue;
+        if (v.only_for >= 0 && v.only_for != id) continue;
         const Rect& r = v.rect;
         if (prev.y >= r.top && e.pos.y <= r.top && overlaps_x(e, p, r) && (landed < 0 || r.top > best)) {
           landed = i;
@@ -194,10 +196,12 @@ std::vector<View> make_views(const Config& cfg, const World& w) {
     r.right += s.offset.x;
     r.bottom += s.offset.y;
     r.top += s.offset.y;
-    views[i] = {r, d.kind, in_play(s.phase)};
+    views[i] = {r, d.kind, in_play(s.phase), -1};
   }
   for (const Placeable& p : w.placeables) {  // one view per slot, so slot k is platform id n + k
-    views.push_back({p.rect, PlatformKind::Solid, p.active != 0 && p.kind == PlaceableKind::Wall});
+    const bool wall = p.kind == PlaceableKind::Wall, ledge = p.kind == PlaceableKind::OneWay;
+    views.push_back({p.rect, ledge ? PlatformKind::PassThrough : PlatformKind::Solid, p.active != 0 && (wall || ledge),
+                     ledge ? p.only_for : -1});
   }
   return views;
 }
@@ -494,7 +498,7 @@ EntityState spawn_on(const Config& cfg, int platform, Fixed x) {
 }
 
 int place(World& w, Placeable p) {
-  if (!(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top) || p.life < 0 || p.traction_scale < Fixed::zero() || p.speed_scale < Fixed::zero() ||
+  if (!(p.rect.left < p.rect.right && p.rect.bottom < p.rect.top) || p.life < 0 || p.only_for < -1 || p.traction_scale < Fixed::zero() || p.speed_scale < Fixed::zero() ||
       (p.kind == PlaceableKind::Spring && p.launch.y <= Fixed::zero())) {
     return -1;
   }

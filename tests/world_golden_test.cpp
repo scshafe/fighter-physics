@@ -187,5 +187,22 @@ int main() {
                    in.jump = f >= 70 && f < 80;
                  }));
   }
+  // Fall onto a ledge only entity 0 can stand on (it is entity 0 here), stand, drop through at
+  // frame 40, land on the floor; the ledge expires at frame 70.
+  {
+    Config c = floor_stage();
+    EntityState e;
+    e.mode = Mode::Airborne;
+    e.pos = Vec2::from_double(0, 40);
+    check_golden("ledge_land_drop", trace(c, e, 100, [](int f, World& w, Intent& in) {
+                   if (f == 1) {
+                     Placeable p = block(-20, 20, 19, 20, 70);
+                     p.kind = PlaceableKind::OneWay;
+                     p.only_for = 0;
+                     place(w, p);
+                   }
+                   in.fast_fall = f == 40;
+                 }));
+  }
   return fp_test::finish();
 }
